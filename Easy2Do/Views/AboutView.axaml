@@ -1,0 +1,51 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:Easy2Do.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="300"
+             x:Class="Easy2Do.Views.AboutView"
+             x:DataType="vm:AboutViewModel">
+  
+  <Design.DataContext>
+    <vm:AboutViewModel />
+  </Design.DataContext>
+
+  <StackPanel Spacing="15">
+    <TextBlock Text="{Binding AppName}" 
+               FontSize="28" 
+               FontWeight="Bold"
+               HorizontalAlignment="Center"
+               Foreground="#FF2196F3"/>
+    
+    <TextBlock Text="{Binding Version, StringFormat='Version {0}'}" 
+               FontSize="14" 
+               HorizontalAlignment="Center"
+               Foreground="#FF666666"/>
+    
+    <Border Height="1" 
+            Background="#FFCCCCCC" 
+            Margin="0,10"/>
+    
+    <TextBlock Text="{Binding Description}" 
+               FontSize="14" 
+               TextWrapping="Wrap"
+               TextAlignment="Center"
+               Margin="20,0"/>
+    
+    <Border Height="1" 
+            Background="#FFCCCCCC" 
+            Margin="0,10"/>
+    
+    <TextBlock Text="{Binding Copyright}" 
+               FontSize="12" 
+               HorizontalAlignment="Center"
+               Foreground="#FF666666"/>
+    
+    <TextBlock Text="Created with ?? using Avalonia UI" 
+               FontSize="12" 
+               HorizontalAlignment="Center"
+               Foreground="#FF666666"
+               Margin="0,5,0,0"/>
+  </StackPanel>
+</UserControl>
