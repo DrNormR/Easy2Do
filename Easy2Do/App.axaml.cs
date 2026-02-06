@@ -6,16 +6,23 @@ using System.Linq;
 using Avalonia.Markup.Xaml;
 using Easy2Do.ViewModels;
 using Easy2Do.Views;
+using Easy2Do.Services;
 
 namespace Easy2Do;
 
 public partial class App : Application
 {
     public static MainWindow? MainWindow { get; private set; }
+    public static SettingsService SettingsService { get; private set; } = null!;
+    public static StorageService StorageService { get; private set; } = null!;
 
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        
+        // Initialize services
+        SettingsService = new SettingsService();
+        StorageService = new StorageService(SettingsService);
     }
 
     public override void OnFrameworkInitializationCompleted()
@@ -30,6 +37,9 @@ public partial class App : Application
                 DataContext = new MainViewModel()
             };
             desktop.MainWindow = MainWindow;
+            
+            // Handle application exit to save notes
+            desktop.Exit += OnExit;
         }
         else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
         {
@@ -40,6 +50,15 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private async void OnExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
+    {
+        // Save notes when application closes
+        if (MainWindow?.DataContext is MainViewModel viewModel)
+        {
+            await StorageService.SaveNotesAsync(viewModel.Notes);
+        }
     }
 
     private void DisableAvaloniaDataAnnotationValidation()

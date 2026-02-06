@@ -42,7 +42,7 @@
                HorizontalAlignment="Center"
                Foreground="#FF666666"/>
     
-    <TextBlock Text="Created with ?? using Avalonia UI" 
+    <TextBlock Text="Created with love using Avalonia UI" 
                FontSize="12" 
                HorizontalAlignment="Center"
                Foreground="#FF666666"

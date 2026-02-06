@@ -24,27 +24,30 @@
             Margin="10,10,10,5">
       <Grid ColumnDefinitions="*,Auto">
         <TextBox Grid.Column="0"
+                 x:Name="TitleTextBox"
                  Text="{Binding Note.Title}"
                  FontSize="20"
                  FontWeight="Bold"
                  BorderThickness="0"
                  Background="Transparent"
-                 Watermark="Note Title..."/>
+                 Watermark="Note Title..."
+                 GotFocus="OnTitleTextBoxGotFocus"
+                 PointerPressed="OnTitleTextBoxPointerPressed"/>
         
         <!-- Color Picker Menu -->
         <DropDownButton Grid.Column="1"
-                        Content="??"
-                        FontSize="16"
+                        Content="Color"
+                        FontSize="14"
                         Padding="8">
           <DropDownButton.Flyout>
             <MenuFlyout Placement="Bottom">
-              <MenuItem Header="?? Yellow" Command="{Binding ChangeColorCommand}" CommandParameter="#FFFFE680"/>
-              <MenuItem Header="?? Red" Command="{Binding ChangeColorCommand}" CommandParameter="#FFFF9999"/>
-              <MenuItem Header="?? Green" Command="{Binding ChangeColorCommand}" CommandParameter="#FF99FF99"/>
-              <MenuItem Header="?? Blue" Command="{Binding ChangeColorCommand}" CommandParameter="#FF99CCFF"/>
-              <MenuItem Header="?? Orange" Command="{Binding ChangeColorCommand}" CommandParameter="#FFFFCC99"/>
-              <MenuItem Header="?? Pink" Command="{Binding ChangeColorCommand}" CommandParameter="#FFFF99FF"/>
-              <MenuItem Header="? Gray" Command="{Binding ChangeColorCommand}" CommandParameter="#FFCCCCCC"/>
+              <MenuItem Header="Yellow" Command="{Binding ChangeColorCommand}" CommandParameter="#FFFFE680"/>
+              <MenuItem Header="Red" Command="{Binding ChangeColorCommand}" CommandParameter="#FFFF9999"/>
+              <MenuItem Header="Green" Command="{Binding ChangeColorCommand}" CommandParameter="#FF99FF99"/>
+              <MenuItem Header="Blue" Command="{Binding ChangeColorCommand}" CommandParameter="#FF99CCFF"/>
+              <MenuItem Header="Orange" Command="{Binding ChangeColorCommand}" CommandParameter="#FFFFCC99"/>
+              <MenuItem Header="Pink" Command="{Binding ChangeColorCommand}" CommandParameter="#FFFF99FF"/>
+              <MenuItem Header="Gray" Command="{Binding ChangeColorCommand}" CommandParameter="#FFCCCCCC"/>
             </MenuFlyout>
           </DropDownButton.Flyout>
         </DropDownButton>
@@ -90,7 +93,7 @@
 
               <!-- Delete Button -->
               <Button Grid.Column="2"
-                      Content="?"
+                      Content="X"
                       Command="{Binding $parent[ItemsControl].((vm:NoteViewModel)DataContext).RemoveItemCommand}"
                       CommandParameter="{Binding}"
                       Background="Transparent"
@@ -122,7 +125,7 @@
                  KeyDown="OnTextBoxKeyDown"/>
         
         <Button Grid.Column="1"
-                Content="?"
+                Content="+"
                 Command="{Binding AddItemCommand}"
                 Background="#FF4CAF50"
                 Foreground="White"

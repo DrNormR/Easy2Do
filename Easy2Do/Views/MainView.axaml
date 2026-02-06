@@ -13,13 +13,13 @@
   <Grid RowDefinitions="Auto,*" Margin="20">
     <!-- Toolbar -->
     <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10" Margin="0,0,0,20">
-      <Button Content="? Create New Note" 
+      <Button Content="+ New Note" 
               Command="{Binding CreateNewNoteCommand}"
               Background="#FF4CAF50"
               Foreground="White"
               Padding="15,10"
               CornerRadius="5"/>
-      <Button Content="?? Settings" 
+      <Button Content="Settings" 
               Command="{Binding OpenSettingsCommand}"
               Background="#FF2196F3"
               Foreground="White"
@@ -62,21 +62,21 @@
                   <StackPanel Grid.Column="1" 
                               Orientation="Horizontal" 
                               Spacing="5">
-                    <Button Content="?? Open" 
+                    <Button Content="Open" 
                             Command="{Binding $parent[ItemsControl].((vm:MainViewModel)DataContext).OpenNoteCommand}"
                             CommandParameter="{Binding}"
                             Background="#FF9C27B0"
                             Foreground="White"
                             Padding="10,5"
                             CornerRadius="3"/>
-                    <Button Content="?? Duplicate" 
+                    <Button Content="Duplicate" 
                             Command="{Binding $parent[ItemsControl].((vm:MainViewModel)DataContext).DuplicateNoteCommand}"
                             CommandParameter="{Binding}"
                             Background="#FFFF9800"
                             Foreground="White"
                             Padding="10,5"
                             CornerRadius="3"/>
-                    <Button Content="??? Delete" 
+                    <Button Content="Delete" 
                             Command="{Binding $parent[ItemsControl].((vm:MainViewModel)DataContext).DeleteNoteCommand}"
                             CommandParameter="{Binding}"
                             Background="#FFF44336"

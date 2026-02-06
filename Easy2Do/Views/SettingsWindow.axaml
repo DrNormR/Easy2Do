@@ -4,11 +4,11 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:Easy2Do.ViewModels"
         xmlns:views="using:Easy2Do.Views"
-        mc:Ignorable="d" d:DesignWidth="500" d:DesignHeight="400"
+        mc:Ignorable="d" d:DesignWidth="550" d:DesignHeight="550"
         x:Class="Easy2Do.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="Settings"
-        Width="500" Height="400"
+        Width="550" Height="550"
         WindowStartupLocation="CenterOwner"
         CanResize="False">
 
@@ -22,6 +22,57 @@
                  FontSize="24" 
                  FontWeight="Bold"
                  Margin="0,0,0,10"/>
+
+      <!-- Storage Location Section -->
+      <Border BorderBrush="#FFCCCCCC" 
+              BorderThickness="1" 
+              CornerRadius="5"
+              Padding="15"
+              Background="#FFF9F9F9">
+        <StackPanel Spacing="10">
+          <TextBlock Text="Storage Location" 
+                     FontSize="16" 
+                     FontWeight="SemiBold"/>
+          
+          <TextBlock Text="Choose where your notes will be saved:"
+                     FontSize="12"
+                     Foreground="#FF666666"
+                     TextWrapping="Wrap"/>
+          
+          <Border BorderBrush="#FFAAAAAA" 
+                  BorderThickness="1" 
+                  CornerRadius="3"
+                  Padding="8"
+                  Background="White">
+            <TextBlock Text="{Binding StorageLocation}" 
+                       FontSize="12"
+                       TextWrapping="Wrap"
+                       Foreground="#FF333333"/>
+          </Border>
+          
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Button Content="Browse..." 
+                    Command="{Binding BrowseStorageLocationCommand}"
+                    Padding="15,8"
+                    Background="#FF4CAF50"
+                    Foreground="White"
+                    CornerRadius="5"/>
+            
+            <Button Content="Open Folder" 
+                    Command="{Binding OpenStorageFolderCommand}"
+                    Padding="15,8"
+                    Background="#FFFF9800"
+                    Foreground="White"
+                    CornerRadius="5"/>
+          </StackPanel>
+          
+          <TextBlock Text="Note: Changing the storage location will not move existing notes."
+                     FontSize="11"
+                     Foreground="#FFFF6600"
+                     FontStyle="Italic"
+                     TextWrapping="Wrap"/>
+        </StackPanel>
+      </Border>
 
       <Border BorderBrush="#FFCCCCCC" 
               BorderThickness="1" 
