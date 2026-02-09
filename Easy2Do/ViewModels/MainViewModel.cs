@@ -43,7 +43,11 @@ public partial class MainViewModel : ViewModelBase
                 
                 // Subscribe to property changes for auto-save
                 note.PropertyChanged += OnNotePropertyChanged;
-                note.Items.CollectionChanged += OnNoteItemsChanged;
+                    note.Items.CollectionChanged += OnNoteItemsChanged;
+                    foreach (var item in note.Items)
+                    {
+                        item.PropertyChanged += OnItemPropertyChanged;
+                    }
             }
         }
         else
@@ -77,6 +81,35 @@ public partial class MainViewModel : ViewModelBase
         {
             // Find the note that owns this items collection
             var note = Notes.FirstOrDefault(n => n.Items == items);
+            if (note != null)
+            {
+                if (e.NewItems != null)
+                {
+                    foreach (TodoItem item in e.NewItems)
+                    {
+                        item.PropertyChanged += OnItemPropertyChanged;
+                    }
+                }
+
+                if (e.OldItems != null)
+                {
+                    foreach (TodoItem item in e.OldItems)
+                    {
+                        item.PropertyChanged -= OnItemPropertyChanged;
+                    }
+                }
+
+                note.ModifiedDate = DateTime.Now;
+                _ = SaveNotesAsync();
+            }
+        }
+    }
+
+    private void OnItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is TodoItem item)
+        {
+            var note = Notes.FirstOrDefault(n => n.Items.Contains(item));
             if (note != null)
             {
                 note.ModifiedDate = DateTime.Now;
@@ -153,7 +186,11 @@ public partial class MainViewModel : ViewModelBase
 
             // Subscribe to property changes for auto-save
             duplicatedNote.PropertyChanged += OnNotePropertyChanged;
-            duplicatedNote.Items.CollectionChanged += OnNoteItemsChanged;
+        duplicatedNote.Items.CollectionChanged += OnNoteItemsChanged;
+        foreach (var item in duplicatedNote.Items)
+        {
+            item.PropertyChanged += OnItemPropertyChanged;
+        }
 
             Notes.Add(duplicatedNote);
             duplicatedNote.ModifiedDate = DateTime.Now;

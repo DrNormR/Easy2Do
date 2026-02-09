@@ -9,4 +9,12 @@ public partial class TodoItem : ObservableObject
 
     [ObservableProperty]
     private bool _isCompleted;
+
+    private bool _isImportant;
+
+    public bool IsImportant
+    {
+        get => _isImportant;
+        set => SetProperty(ref _isImportant, value);
+    }
 }

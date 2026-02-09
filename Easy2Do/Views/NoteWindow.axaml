@@ -3,6 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:Easy2Do.ViewModels"
+        xmlns:conv="using:Easy2Do.Converters"
         mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="500"
         x:Class="Easy2Do.Views.NoteWindow"
         x:DataType="vm:NoteViewModel"
@@ -10,6 +11,15 @@
         Width="400" Height="500"
         MinWidth="300" MinHeight="400"
         Background="{Binding Note.Color}">
+
+  <Window.Resources>
+    <conv:BoolToBrushConverter x:Key="ImportantBrush" TrueBrush="#D32F2F" FalseBrush="#000000" />
+    <conv:BoolToBrushConverter x:Key="ImportantCompletedBrush" TrueBrush="#D32F2F" FalseBrush="#FF888888" />
+    <conv:BoolToBrushConverter x:Key="ImportantButtonBrush" TrueBrush="#D32F2F" FalseBrush="#888888" />
+    <conv:BoolToBrushConverter x:Key="ImportantRowBrush" TrueBrush="#1AD32F2F" FalseBrush="Transparent" />
+    <conv:BoolOrMultiConverter x:Key="BoolOrConverter" />
+    <conv:BoolToFontWeightConverter x:Key="ImportantFontWeight" />
+  </Window.Resources>
 
   <Design.DataContext>
     <vm:NoteViewModel />
@@ -25,14 +35,16 @@
       <Grid ColumnDefinitions="*,Auto">
         <TextBox Grid.Column="0"
                  x:Name="TitleTextBox"
-                 Text="{Binding Note.Title}"
+                 Text="{Binding Note.Title, UpdateSourceTrigger=PropertyChanged}"
+                 FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
                  FontSize="20"
-                 FontWeight="Bold"
+                 FontWeight="Normal"
                  BorderThickness="0"
                  Background="Transparent"
                  Watermark="Note Title..."
                  GotFocus="OnTitleTextBoxGotFocus"
-                 PointerPressed="OnTitleTextBoxPointerPressed"/>
+                 PointerPressed="OnTitleTextBoxPointerPressed"
+                 KeyDown="OnTitleTextBoxKeyDown"/>
         
         <!-- Color Picker Menu -->
         <DropDownButton Grid.Column="1"
@@ -62,45 +74,91 @@
 
     <!-- Items List -->
     <ScrollViewer Grid.Row="2" Margin="15,0,15,10">
-      <ItemsControl ItemsSource="{Binding Note.Items}">
+      <ItemsControl ItemsSource="{Binding Note.Items}" x:CompileBindings="False">
         <ItemsControl.ItemTemplate>
           <DataTemplate>
-            <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,5">
+            <Grid x:Name="ItemRow" ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6" Margin="6,5,0,5"
+                  Background="{Binding IsImportant, Converter={StaticResource ImportantRowBrush}}">
+              <!-- Important Button -->
+              <Button x:Name="ImportantButton"
+                      Grid.Column="0"
+                      Width="26"
+                      Content="&#x1F6A8;"
+                      FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                      HorizontalAlignment="Left"
+                      Background="Transparent"
+                      BorderThickness="0"
+                      FontSize="18"
+                      Padding="4"
+                      Margin="2,0,8,0"
+                      Foreground="{Binding IsImportant, Converter={StaticResource ImportantButtonBrush}}"
+                      IsVisible="True"
+                      Click="OnImportantButtonClick">
+                <Button.Opacity>
+                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
+                    <Binding Path="IsImportant" />
+                    <Binding Path="#ItemRow.IsPointerOver" />
+                  </MultiBinding>
+                </Button.Opacity>
+                <Button.IsHitTestVisible>
+                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
+                    <Binding Path="IsImportant" />
+                    <Binding Path="#ItemRow.IsPointerOver" />
+                  </MultiBinding>
+                </Button.IsHitTestVisible>
+              </Button>
+
               <!-- Checkbox -->
-              <CheckBox Grid.Column="0" 
+              <CheckBox Grid.Column="1" 
                         IsChecked="{Binding IsCompleted}"
                         VerticalAlignment="Center"
-                        Margin="0,0,10,0"/>
+                        Margin="6,0,10,0"/>
               
               <!-- Item Text with conditional styling -->
-              <StackPanel Grid.Column="1" Orientation="Horizontal">
+              <StackPanel Grid.Column="2" Orientation="Horizontal">
                 <!-- Show non-strikethrough text when not completed -->
                 <TextBlock Text="{Binding Text}"
                            FontSize="14"
                            TextWrapping="Wrap"
                            VerticalAlignment="Center"
-                           IsVisible="{Binding !IsCompleted}"/>
+                           IsVisible="{Binding !IsCompleted}"
+                           Foreground="{Binding IsImportant, Converter={StaticResource ImportantBrush}}"
+                           FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"/>
                 
                 <!-- Show strikethrough text when completed -->
                 <TextBlock Text="{Binding Text}"
                            FontSize="14"
                            TextWrapping="Wrap"
                            TextDecorations="Strikethrough"
-                           Foreground="#FF888888"
+                           Foreground="{Binding IsImportant, Converter={StaticResource ImportantCompletedBrush}}"
                            VerticalAlignment="Center"
-                           IsVisible="{Binding IsCompleted}"/>
+                           IsVisible="{Binding IsCompleted}"
+                           FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"/>
               </StackPanel>
 
               <!-- Delete Button -->
-              <Button Grid.Column="2"
+              <Button Grid.Column="3"
+                      Width="20"
                       Content="X"
-                      Command="{Binding $parent[ItemsControl].((vm:NoteViewModel)DataContext).RemoveItemCommand}"
+                      Command="{Binding $parent[ItemsControl].DataContext.RemoveItemCommand}"
                       CommandParameter="{Binding}"
                       Background="Transparent"
                       BorderThickness="0"
                       FontSize="12"
                       Padding="5"
-                      Margin="5,0,0,0"/>
+                      Margin="5,0,20,0"
+                      Foreground="#D32F2F">
+                <Button.Opacity>
+                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
+                    <Binding Path="#ItemRow.IsPointerOver" />
+                  </MultiBinding>
+                </Button.Opacity>
+                <Button.IsHitTestVisible>
+                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
+                    <Binding Path="#ItemRow.IsPointerOver" />
+                  </MultiBinding>
+                </Button.IsHitTestVisible>
+              </Button>
             </Grid>
           </DataTemplate>
         </ItemsControl.ItemTemplate>

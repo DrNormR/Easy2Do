@@ -48,9 +48,11 @@
                   <StackPanel Grid.Column="0" Spacing="5">
                     <TextBlock Text="{Binding Title}" 
                                FontSize="18" 
-                               FontWeight="Bold"/>
+                               FontWeight="Normal"
+                               FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
                     <TextBlock FontSize="12" 
-                               Foreground="#FF666666">
+                               Foreground="#FF666666"
+                               FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
                       <Run Text="Items: "/>
                       <Run Text="{Binding Items.Count}"/>
                       <Run Text=" • Modified: "/>
