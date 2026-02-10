@@ -22,15 +22,6 @@ public partial class MainViewModel : ViewModelBase
     private bool _isSaving = false;
     private bool _isLoading = false;
 
-    private static readonly string[] NoteColors =
-    [
-        "#FFFFFFFF", "#FFFFE680", "#FFFF9999", "#FF99FF99", "#FF99CCFF",
-        "#FFFFCC99", "#FFFF99FF", "#FFCCCCCC", "#FFFFF3E0", "#FFE8F5E9",
-        "#FFE3F2FD", "#FFF3E5F5", "#FFFCE4EC", "#FFFFF8E1", "#FFE0F7FA"
-    ];
-
-    private static readonly Random _random = new();
-
     public MainViewModel()
     {
         // Load notes asynchronously
@@ -146,7 +137,7 @@ public partial class MainViewModel : ViewModelBase
         var newNote = new Note
         {
             Title = "New Note",
-            Color = NoteColors[_random.Next(NoteColors.Length)]
+            Color = "#FFFFE680"
         };
         
         // Subscribe to property changes for auto-save
