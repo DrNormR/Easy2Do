@@ -33,7 +33,7 @@
     <vm:NoteViewModel />
   </Design.DataContext>
 
-  <Grid RowDefinitions="Auto,Auto,*,Auto">
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Focusable="True" PointerPressed="OnBackgroundPointerPressed">
     <!-- Title Section -->
     <Border Grid.Row="0" 
             Background="#33000000" 
@@ -155,7 +155,7 @@
             Margin="16,3,16,6"/>
 
     <!-- Items List -->
-    <ScrollViewer Grid.Row="2" Margin="4,0,4,6">
+    <ScrollViewer Grid.Row="2" Margin="4,0,4,6" Focusable="True" PointerPressed="OnBackgroundPointerPressed">
       <ItemsControl x:Name="ItemsControl" ItemsSource="{Binding Note.Items}" x:CompileBindings="False" DragDrop.AllowDrop="True">
         <ItemsControl.ItemTemplate>
           <DataTemplate>
@@ -246,56 +246,100 @@
               </CheckBox>
               
               <!-- Item Text with conditional styling -->
-              <StackPanel Grid.Column="3" Orientation="Horizontal">
+              <Grid Grid.Column="3">
                 <!-- Heading text -->
-                <TextBlock Text="{Binding Text}"
-                           FontSize="12"
-                           TextWrapping="Wrap"
-                           VerticalAlignment="Center"
-                           IsVisible="{Binding IsHeading}"
-                           Foreground="{Binding IsImportant, Converter={StaticResource ImportantBrush}}"
-                           FontWeight="Bold"
-                           Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"/>
+                <TextBox Text="{Binding Text}"
+                         FontSize="12"
+                         TextWrapping="Wrap"
+                         VerticalAlignment="Center"
+                         IsVisible="{Binding IsHeading}"
+                         Foreground="{Binding IsImportant, Converter={StaticResource ImportantBrush}}"
+                         FontWeight="Bold"
+                         Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         Padding="0"
+                         MinHeight="0"
+                         GotFocus="OnItemTextBoxGotFocus"
+                         KeyDown="OnItemTextBoxKeyDown"/>
 
                 <!-- Show non-strikethrough text when not completed (non-heading) -->
-                <TextBlock Text="{Binding Text}"
-                           FontSize="12"
-                           TextWrapping="Wrap"
-                           VerticalAlignment="Center"
-                           FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}">
-                  <TextBlock.Margin>
+                <TextBox Text="{Binding Text}"
+                         FontSize="12"
+                         TextWrapping="Wrap"
+                         VerticalAlignment="Center"
+                         FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         Padding="0"
+                         MinHeight="0"
+                         GotFocus="OnItemTextBoxGotFocus"
+                         KeyDown="OnItemTextBoxKeyDown">
+                  <TextBox.Margin>
                     <Binding Path="IsHeading" Converter="{StaticResource HeadingTextIndent}" />
-                  </TextBlock.Margin>
-                  <TextBlock.IsVisible>
+                  </TextBox.Margin>
+                  <TextBox.IsVisible>
                     <MultiBinding Converter="{StaticResource BoolAndConverter}">
                       <Binding Path="IsHeading" Converter="{StaticResource NotConverter}" />
                       <Binding Path="IsCompleted" Converter="{StaticResource NotConverter}" />
                     </MultiBinding>
-                  </TextBlock.IsVisible>
-                  <TextBlock.Foreground>
+                  </TextBox.IsVisible>
+                  <TextBox.Foreground>
                     <Binding Path="IsImportant" Converter="{StaticResource ImportantBrush}" />
-                  </TextBlock.Foreground>
-                </TextBlock>
+                  </TextBox.Foreground>
+                </TextBox>
                 
                 <!-- Show strikethrough text when completed (non-heading) -->
-                <TextBlock Text="{Binding Text}"
+                <Grid>
+                  <TextBox Text="{Binding Text}"
                            FontSize="12"
                            TextWrapping="Wrap"
-                           TextDecorations="Strikethrough"
                            VerticalAlignment="Center"
                            FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"
-                           Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}">
-                  <TextBlock.IsVisible>
-                    <MultiBinding Converter="{StaticResource BoolAndConverter}">
-                      <Binding Path="IsHeading" Converter="{StaticResource NotConverter}" />
-                      <Binding Path="IsCompleted" />
-                    </MultiBinding>
-                  </TextBlock.IsVisible>
-                  <TextBlock.Foreground>
-                    <Binding Path="IsImportant" Converter="{StaticResource ImportantCompletedBrush}" />
-                  </TextBlock.Foreground>
-                </TextBlock>
-              </StackPanel>
+                           Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"
+                           Background="Transparent"
+                           BorderThickness="0"
+                           Padding="0"
+                           MinHeight="0"
+                           GotFocus="OnItemTextBoxGotFocus"
+                           KeyDown="OnItemTextBoxKeyDown">
+                    <TextBox.IsVisible>
+                      <MultiBinding Converter="{StaticResource BoolAndConverter}">
+                        <Binding Path="IsHeading" Converter="{StaticResource NotConverter}" />
+                        <Binding Path="IsCompleted" />
+                      </MultiBinding>
+                    </TextBox.IsVisible>
+                    <TextBox.Foreground>
+                      <Binding Path="IsImportant" Converter="{StaticResource ImportantCompletedBrush}" />
+                    </TextBox.Foreground>
+                  </TextBox>
+                  <TextBlock Text="{Binding Text}"
+                             FontSize="12"
+                             TextWrapping="Wrap"
+                             VerticalAlignment="Center"
+                             FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"
+                             Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"
+                             Padding="0"
+                             Foreground="Transparent"
+                             IsHitTestVisible="False">
+                    <TextBlock.IsVisible>
+                      <MultiBinding Converter="{StaticResource BoolAndConverter}">
+                        <Binding Path="IsHeading" Converter="{StaticResource NotConverter}" />
+                        <Binding Path="IsCompleted" />
+                      </MultiBinding>
+                    </TextBlock.IsVisible>
+                    <TextBlock.TextDecorations>
+                      <TextDecorationCollection>
+                        <TextDecoration Location="Strikethrough" StrokeThickness="1">
+                          <TextDecoration.Stroke>
+                            <SolidColorBrush Color="#888888"/>
+                          </TextDecoration.Stroke>
+                        </TextDecoration>
+                      </TextDecorationCollection>
+                    </TextBlock.TextDecorations>
+                  </TextBlock>
+                </Grid>
+              </Grid>
 
               <!-- Delete Button -->
               <Button Grid.Column="4"

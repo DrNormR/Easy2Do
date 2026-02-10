@@ -59,6 +59,32 @@ public partial class NoteWindow : Window
         }
     }
 
+    private void OnBackgroundPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Control control)
+        {
+            control.Focus();
+        }
+    }
+
+    private void OnItemTextBoxGotFocus(object? sender, GotFocusEventArgs e)
+    {
+        if (sender is TextBox textBox)
+        {
+            Dispatcher.UIThread.Post(() => textBox.CaretIndex = textBox.Text?.Length ?? 0);
+        }
+    }
+
+    private void OnItemTextBoxKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && sender is TextBox textBox)
+        {
+            e.Handled = true;
+            textBox.IsEnabled = false;
+            Dispatcher.UIThread.Post(() => textBox.IsEnabled = true);
+        }
+    }
+
     private void OnTitleTextBoxGotFocus(object? sender, GotFocusEventArgs e)
     {
         if (sender is TextBox textBox)

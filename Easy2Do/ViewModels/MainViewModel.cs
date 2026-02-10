@@ -20,6 +20,7 @@ public partial class MainViewModel : ViewModelBase
     private Note? _selectedNote;
 
     private bool _isSaving = false;
+    private bool _isLoading = false;
 
     public MainViewModel()
     {
@@ -32,10 +33,11 @@ public partial class MainViewModel : ViewModelBase
 
     private async Task LoadNotesAsync()
     {
-        var loadedNotes = await App.StorageService.LoadNotesAsync();
-        
-        if (loadedNotes.Count > 0)
+        _isLoading = true;
+        try
         {
+            var loadedNotes = await App.StorageService.LoadNotesAsync();
+            
             Notes.Clear();
             foreach (var note in loadedNotes)
             {
@@ -43,34 +45,23 @@ public partial class MainViewModel : ViewModelBase
                 
                 // Subscribe to property changes for auto-save
                 note.PropertyChanged += OnNotePropertyChanged;
-                    note.Items.CollectionChanged += OnNoteItemsChanged;
-                    foreach (var item in note.Items)
-                    {
-                        item.PropertyChanged += OnItemPropertyChanged;
-                    }
+                note.Items.CollectionChanged += OnNoteItemsChanged;
+                foreach (var item in note.Items)
+                {
+                    item.PropertyChanged += OnItemPropertyChanged;
+                }
             }
         }
-        else
+        finally
         {
-            // Add a sample note for demonstration if no notes exist
-            var sampleNote = new Note
-            {
-                Title = "Sample Note",
-                Color = "#FFFFE680"
-            };
-            sampleNote.Items.Add(new TodoItem { Text = "Click to mark as complete" });
-            sampleNote.Items.Add(new TodoItem { Text = "Click 'Create New Note' to add more notes", IsCompleted = true });
-            Notes.Add(sampleNote);
-            await SaveNotesAsync();
+            _isLoading = false;
         }
     }
 
     private void OnNotePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        // Ignore ModifiedDate and window geometry changes to prevent excessive saves
-        if (e.PropertyName is nameof(Note.ModifiedDate) or 
-            nameof(Note.WindowX) or nameof(Note.WindowY) or 
-            nameof(Note.WindowWidth) or nameof(Note.WindowHeight))
+        // Ignore ModifiedDate to prevent recursive saves
+        if (e.PropertyName is nameof(Note.ModifiedDate))
             return;
 
         if (sender is Note note)
@@ -125,7 +116,7 @@ public partial class MainViewModel : ViewModelBase
 
     private async Task SaveNotesAsync()
     {
-        if (_isSaving) return;
+        if (_isSaving || _isLoading) return;
         
         try
         {
