@@ -35,4 +35,7 @@ public partial class Note : ObservableObject
 
     [ObservableProperty]
     private double _windowHeight = double.NaN;
+
+    [ObservableProperty]
+    private bool _isPinned;
 }

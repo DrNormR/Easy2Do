@@ -60,4 +60,11 @@ public partial class NoteViewModel : ViewModelBase
         Note.Color = color;
         Note.ModifiedDate = DateTime.Now;
     }
+
+    [RelayCommand]
+    private void TogglePin()
+    {
+        Note.IsPinned = !Note.IsPinned;
+        Note.ModifiedDate = DateTime.Now;
+    }
 }
