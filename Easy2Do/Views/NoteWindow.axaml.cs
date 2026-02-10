@@ -5,6 +5,8 @@ using Avalonia.Threading;
 using Avalonia;
 using Easy2Do.ViewModels;
 using Easy2Do.Models;
+using Avalonia.VisualTree;
+using System;
 
 namespace Easy2Do.Views;
 
@@ -49,8 +51,6 @@ public partial class NoteWindow : Window
         if (e.Key == Key.Enter && sender is TextBox textBox)
         {
             e.Handled = true;
-            // Title binding uses UpdateSourceTrigger=PropertyChanged, so value is already committed.
-            // Clear focus so caret disappears and SaveNotes triggers via PropertyChanged.
             textBox.IsEnabled = false;
             Dispatcher.UIThread.Post(() => textBox.IsEnabled = true);
         }
@@ -65,6 +65,148 @@ public partial class NoteWindow : Window
             {
                 var current = prop.GetValue(ctx) as bool? ?? false;
                 prop.SetValue(ctx, !current);
+            }
+        }
+    }
+
+    private const string DragItemFormat = "todo-item";
+
+    private async void OnMoveHandlePointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Border border && border.DataContext is TodoItem item
+            && e.GetCurrentPoint(border).Properties.IsLeftButtonPressed)
+        {
+            var data = new DataObject();
+            data.Set(DragItemFormat, item);
+            e.Handled = true;
+            await DragDrop.DoDragDrop(e, data, DragDropEffects.Move);
+        }
+    }
+
+    private static Border? FindChildBorder(Grid grid, string name)
+    {
+        foreach (var child in grid.GetVisualChildren())
+        {
+            if (child is Border b && b.Name == name)
+                return b;
+        }
+        return null;
+    }
+
+    private void OnItemRowDragOver(object? sender, DragEventArgs e)
+    {
+        if (sender is Grid grid && DataContext is NoteViewModel vm)
+        {
+            var dragItem = e.Data.Get(DragItemFormat) as TodoItem;
+            if (dragItem is null)
+            {
+                e.DragEffects = DragDropEffects.None;
+                e.Handled = true;
+                return;
+            }
+
+            var targetItem = grid.DataContext as TodoItem;
+            if (targetItem is null || ReferenceEquals(targetItem, dragItem))
+            {
+                e.DragEffects = DragDropEffects.None;
+                e.Handled = true;
+                return;
+            }
+
+            HideAllDropIndicators();
+
+            var beforeIndicator = FindChildBorder(grid, "DropIndicatorBefore");
+            var afterIndicator = FindChildBorder(grid, "DropIndicatorAfter");
+
+            var pos = e.GetPosition(grid);
+            var insertBefore = pos.Y < grid.Bounds.Height / 2;
+
+            if (beforeIndicator != null && afterIndicator != null)
+            {
+                beforeIndicator.IsVisible = insertBefore;
+                afterIndicator.IsVisible = !insertBefore;
+            }
+
+            e.DragEffects = DragDropEffects.Move;
+            e.Handled = true;
+        }
+    }
+
+    private void OnItemRowDragEnter(object? sender, DragEventArgs e)
+    {
+        OnItemRowDragOver(sender, e);
+    }
+
+    private void OnItemRowDragLeave(object? sender, DragEventArgs e)
+    {
+        if (sender is Grid grid)
+        {
+            var before = FindChildBorder(grid, "DropIndicatorBefore");
+            var after = FindChildBorder(grid, "DropIndicatorAfter");
+            if (before != null) before.IsVisible = false;
+            if (after != null) after.IsVisible = false;
+        }
+    }
+
+    private void OnItemRowDrop(object? sender, DragEventArgs e)
+    {
+        if (sender is Grid grid && DataContext is NoteViewModel vm)
+        {
+            var dragItem = e.Data.Get(DragItemFormat) as TodoItem;
+            if (dragItem is null)
+            {
+                return;
+            }
+
+            var targetItem = grid.DataContext as TodoItem;
+            if (targetItem is null)
+            {
+                HideAllDropIndicators();
+                return;
+            }
+
+            var items = vm.Note.Items;
+            var sourceIndex = items.IndexOf(dragItem);
+            var targetIndex = items.IndexOf(targetItem);
+            if (sourceIndex < 0 || targetIndex < 0)
+            {
+                HideAllDropIndicators();
+                return;
+            }
+
+            var beforeIndicator = FindChildBorder(grid, "DropIndicatorBefore");
+            var insertBefore = beforeIndicator?.IsVisible == true;
+            var insertIndex = insertBefore ? targetIndex : targetIndex + 1;
+
+            if (insertIndex > items.Count)
+            {
+                insertIndex = items.Count;
+            }
+
+            if (sourceIndex < insertIndex)
+            {
+                insertIndex -= 1;
+            }
+
+            if (insertIndex != sourceIndex)
+            {
+                items.Move(sourceIndex, insertIndex);
+                vm.Note.ModifiedDate = DateTime.Now;
+            }
+
+            HideAllDropIndicators();
+            e.DragEffects = DragDropEffects.Move;
+            e.Handled = true;
+        }
+    }
+
+    private void HideAllDropIndicators()
+    {
+        foreach (var desc in this.GetVisualDescendants())
+        {
+            if (desc is Border border && (border.Name == "DropIndicatorBefore" || border.Name == "DropIndicatorAfter"))
+            {
+                border.IsVisible = false;
             }
         }
     }

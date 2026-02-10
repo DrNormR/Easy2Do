@@ -10,6 +10,9 @@ public partial class TodoItem : ObservableObject
     [ObservableProperty]
     private bool _isCompleted;
 
+    [ObservableProperty]
+    private bool _isHeading;
+
     private bool _isImportant;
 
     public bool IsImportant

@@ -18,7 +18,12 @@
     <conv:BoolToBrushConverter x:Key="ImportantButtonBrush" TrueBrush="#D32F2F" FalseBrush="#888888" />
     <conv:BoolToBrushConverter x:Key="ImportantRowBrush" TrueBrush="#1AD32F2F" FalseBrush="Transparent" />
     <conv:BoolOrMultiConverter x:Key="BoolOrConverter" />
+    <conv:BoolAndConverter x:Key="BoolAndConverter" />
     <conv:BoolToFontWeightConverter x:Key="ImportantFontWeight" />
+    <conv:BoolToThicknessConverter x:Key="HeadingIndent" TrueThickness="6,5,0,5" FalseThickness="6,5,0,5" />
+    <conv:BoolToThicknessConverter x:Key="HeadingCheckIndent" TrueThickness="0,0,10,0" FalseThickness="14,0,10,0" />
+    <conv:BoolToThicknessConverter x:Key="HeadingTextIndent" TrueThickness="0,0,0,0" FalseThickness="14,0,0,0" />
+    <conv:BoolNotConverter x:Key="NotConverter" />
   </Window.Resources>
 
   <Design.DataContext>
@@ -74,14 +79,56 @@
 
     <!-- Items List -->
     <ScrollViewer Grid.Row="2" Margin="15,0,15,10">
-      <ItemsControl ItemsSource="{Binding Note.Items}" x:CompileBindings="False">
+      <ItemsControl x:Name="ItemsControl" ItemsSource="{Binding Note.Items}" x:CompileBindings="False" DragDrop.AllowDrop="True">
         <ItemsControl.ItemTemplate>
           <DataTemplate>
-            <Grid x:Name="ItemRow" ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6" Margin="6,5,0,5"
+            <Grid x:Name="ItemRow" ColumnDefinitions="Auto,Auto,Auto,*,Auto" ColumnSpacing="6" Margin="6,5,0,5"
+                  DragDrop.AllowDrop="True"
+                  DragDrop.DragEnter="OnItemRowDragEnter"
+                  DragDrop.DragOver="OnItemRowDragOver"
+                  DragDrop.DragLeave="OnItemRowDragLeave"
+                  DragDrop.Drop="OnItemRowDrop"
                   Background="{Binding IsImportant, Converter={StaticResource ImportantRowBrush}}">
+              <Border x:Name="DropIndicatorBefore"
+                      Grid.ColumnSpan="5"
+                      Height="3"
+                      Background="#888888"
+                      VerticalAlignment="Top"
+                      HorizontalAlignment="Stretch"
+                      IsVisible="False"
+                      IsHitTestVisible="False"/>
+              <Border x:Name="DropIndicatorAfter"
+                      Grid.ColumnSpan="5"
+                      Height="3"
+                      Background="#888888"
+                      VerticalAlignment="Bottom"
+                      HorizontalAlignment="Stretch"
+                      IsVisible="False"
+                      IsHitTestVisible="False"/>
+
+              <!-- Move Handle -->
+              <Border x:Name="MoveHandle"
+                      Grid.Column="0"
+                      Width="22"
+                      Background="Transparent"
+                      Cursor="Hand"
+                      HorizontalAlignment="Left"
+                      PointerPressed="OnMoveHandlePointerPressed">
+                <Border.Opacity>
+                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
+                    <Binding Path="#ItemRow.IsPointerOver" />
+                  </MultiBinding>
+                </Border.Opacity>
+                <TextBlock Text="&#xE700;"
+                           FontFamily="Segoe MDL2 Assets"
+                           FontSize="16"
+                           Foreground="#888888"
+                           Padding="2"
+                           VerticalAlignment="Center"/>
+              </Border>
               <!-- Important Button -->
               <Button x:Name="ImportantButton"
-                      Grid.Column="0"
+                      Grid.Column="1"
                       Width="26"
                       Content="&#x1F6A8;"
                       FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
@@ -109,35 +156,67 @@
               </Button>
 
               <!-- Checkbox -->
-              <CheckBox Grid.Column="1" 
+              <CheckBox Grid.Column="2" 
                         IsChecked="{Binding IsCompleted}"
+                        IsVisible="{Binding IsHeading, Converter={StaticResource NotConverter}}"
+                        IsEnabled="{Binding IsHeading, Converter={StaticResource NotConverter}}"
                         VerticalAlignment="Center"
-                        Margin="6,0,10,0"/>
+                        Margin="{Binding IsHeading, Converter={StaticResource HeadingCheckIndent}}"/>
               
               <!-- Item Text with conditional styling -->
-              <StackPanel Grid.Column="2" Orientation="Horizontal">
-                <!-- Show non-strikethrough text when not completed -->
+              <StackPanel Grid.Column="3" Orientation="Horizontal">
+                <!-- Heading text -->
                 <TextBlock Text="{Binding Text}"
                            FontSize="14"
                            TextWrapping="Wrap"
                            VerticalAlignment="Center"
-                           IsVisible="{Binding !IsCompleted}"
+                           IsVisible="{Binding IsHeading}"
                            Foreground="{Binding IsImportant, Converter={StaticResource ImportantBrush}}"
-                           FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"/>
+                           FontWeight="Bold"
+                           Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"/>
+
+                <!-- Show non-strikethrough text when not completed (non-heading) -->
+                <TextBlock Text="{Binding Text}"
+                           FontSize="14"
+                           TextWrapping="Wrap"
+                           VerticalAlignment="Center"
+                           FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}">
+                  <TextBlock.Margin>
+                    <Binding Path="IsHeading" Converter="{StaticResource HeadingTextIndent}" />
+                  </TextBlock.Margin>
+                  <TextBlock.IsVisible>
+                    <MultiBinding Converter="{StaticResource BoolAndConverter}">
+                      <Binding Path="IsHeading" Converter="{StaticResource NotConverter}" />
+                      <Binding Path="IsCompleted" Converter="{StaticResource NotConverter}" />
+                    </MultiBinding>
+                  </TextBlock.IsVisible>
+                  <TextBlock.Foreground>
+                    <Binding Path="IsImportant" Converter="{StaticResource ImportantBrush}" />
+                  </TextBlock.Foreground>
+                </TextBlock>
                 
-                <!-- Show strikethrough text when completed -->
+                <!-- Show strikethrough text when completed (non-heading) -->
                 <TextBlock Text="{Binding Text}"
                            FontSize="14"
                            TextWrapping="Wrap"
                            TextDecorations="Strikethrough"
-                           Foreground="{Binding IsImportant, Converter={StaticResource ImportantCompletedBrush}}"
                            VerticalAlignment="Center"
-                           IsVisible="{Binding IsCompleted}"
-                           FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"/>
+                           FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"
+                           Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}">
+                  <TextBlock.IsVisible>
+                    <MultiBinding Converter="{StaticResource BoolAndConverter}">
+                      <Binding Path="IsHeading" Converter="{StaticResource NotConverter}" />
+                      <Binding Path="IsCompleted" />
+                    </MultiBinding>
+                  </TextBlock.IsVisible>
+                  <TextBlock.Foreground>
+                    <Binding Path="IsImportant" Converter="{StaticResource ImportantCompletedBrush}" />
+                  </TextBlock.Foreground>
+                </TextBlock>
               </StackPanel>
 
               <!-- Delete Button -->
-              <Button Grid.Column="3"
+              <Button Grid.Column="4"
                       Width="20"
                       Content="X"
                       Command="{Binding $parent[ItemsControl].DataContext.RemoveItemCommand}"
@@ -171,8 +250,20 @@
             Padding="15"
             CornerRadius="0,0,5,5"
             Margin="10,5,10,10">
-      <Grid ColumnDefinitions="*,Auto">
-        <TextBox Grid.Column="0"
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <ToggleButton Grid.Column="0"
+                      Width="36"
+                      Content="H"
+                      FontWeight="Bold"
+                      FontSize="16"
+                      Background="#FFE0E0E0"
+                      BorderBrush="#FFAAAAAA"
+                      BorderThickness="1"
+                      Padding="6,8"
+                      Margin="0,0,8,0"
+                      IsChecked="{Binding NewItemIsHeading, Mode=TwoWay}"/>
+
+        <TextBox Grid.Column="1"
                  Text="{Binding NewItemText}"
                  Watermark="Add new item..."
                  Background="White"
@@ -182,7 +273,7 @@
                  CornerRadius="3"
                  KeyDown="OnTextBoxKeyDown"/>
         
-        <Button Grid.Column="1"
+        <Button Grid.Column="2"
                 Content="+"
                 Command="{Binding AddItemCommand}"
                 Background="#FF4CAF50"

@@ -15,6 +15,9 @@ public partial class NoteViewModel : ViewModelBase
     [ObservableProperty]
     private string _newItemText = string.Empty;
 
+    [ObservableProperty]
+    private bool _newItemIsHeading;
+
     public ObservableCollection<string> AvailableColors { get; } = new()
     {
         "#FFFFE680", // Yellow
@@ -36,9 +39,10 @@ public partial class NoteViewModel : ViewModelBase
     {
         if (!string.IsNullOrWhiteSpace(NewItemText))
         {
-            var item = new TodoItem { Text = NewItemText };
+            var item = new TodoItem { Text = NewItemText, IsHeading = NewItemIsHeading };
             Note.Items.Add(item);
             NewItemText = string.Empty;
+            NewItemIsHeading = false;
             Note.ModifiedDate = DateTime.Now;
         }
     }
