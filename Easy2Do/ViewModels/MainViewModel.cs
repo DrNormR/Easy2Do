@@ -2,6 +2,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -21,6 +22,8 @@ public partial class MainViewModel : ViewModelBase
 
     private bool _isSaving = false;
     private bool _isLoading = false;
+    private CancellationTokenSource? _debounceCts;
+    private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(500);
 
     public MainViewModel()
     {
@@ -28,7 +31,7 @@ public partial class MainViewModel : ViewModelBase
         _ = LoadNotesAsync();
         
         // Subscribe to collection changes to auto-save
-        Notes.CollectionChanged += (s, e) => _ = SaveNotesAsync();
+        Notes.CollectionChanged += (s, e) => RequestSave();
     }
 
     private async Task LoadNotesAsync()
@@ -67,7 +70,7 @@ public partial class MainViewModel : ViewModelBase
         if (sender is Note note)
         {
             note.ModifiedDate = DateTime.Now;
-            _ = SaveNotesAsync();
+            RequestSave();
         }
     }
 
@@ -96,7 +99,7 @@ public partial class MainViewModel : ViewModelBase
                 }
 
                 note.ModifiedDate = DateTime.Now;
-                _ = SaveNotesAsync();
+                RequestSave();
             }
         }
     }
@@ -109,20 +112,42 @@ public partial class MainViewModel : ViewModelBase
             if (note != null)
             {
                 note.ModifiedDate = DateTime.Now;
-                _ = SaveNotesAsync();
+                RequestSave();
             }
         }
     }
 
-    private async Task SaveNotesAsync()
+    private void RequestSave()
+    {
+        if (_isLoading) return;
+
+        _debounceCts?.Cancel();
+        _debounceCts = new CancellationTokenSource();
+        var token = _debounceCts.Token;
+
+        _ = DebouncedSaveAsync(token);
+    }
+
+    private async Task DebouncedSaveAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(DebounceDelay, token);
+            await SaveNotesNowAsync();
+        }
+        catch (TaskCanceledException)
+        {
+            // Debounce reset — a newer save is pending
+        }
+    }
+
+    private async Task SaveNotesNowAsync()
     {
         if (_isSaving || _isLoading) return;
-        
+
         try
         {
             _isSaving = true;
-            
-            // Just save - don't update ModifiedDate here!
             await App.StorageService.SaveNotesAsync(Notes);
         }
         finally
@@ -146,7 +171,7 @@ public partial class MainViewModel : ViewModelBase
         
         Notes.Add(newNote);
         newNote.ModifiedDate = DateTime.Now;
-        await SaveNotesAsync();
+        await SaveNotesNowAsync();
         OpenNote(newNote);
     }
 
@@ -156,7 +181,7 @@ public partial class MainViewModel : ViewModelBase
         if (note != null && Notes.Contains(note))
         {
             Notes.Remove(note);
-            await SaveNotesAsync();
+            await SaveNotesNowAsync();
         }
     }
 
@@ -190,7 +215,7 @@ public partial class MainViewModel : ViewModelBase
 
             Notes.Add(duplicatedNote);
             duplicatedNote.ModifiedDate = DateTime.Now;
-            await SaveNotesAsync();
+            await SaveNotesNowAsync();
         }
     }
 
