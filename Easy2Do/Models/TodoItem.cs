@@ -20,4 +20,20 @@ public partial class TodoItem : ObservableObject
         get => _isImportant;
         set => SetProperty(ref _isImportant, value);
     }
+
+    private string _textAttachment = string.Empty;
+
+    public string TextAttachment
+    {
+        get => _textAttachment;
+        set
+        {
+            if (SetProperty(ref _textAttachment, value))
+            {
+                OnPropertyChanged(nameof(HasTextAttachment));
+            }
+        }
+    }
+
+    public bool HasTextAttachment => !string.IsNullOrEmpty(_textAttachment);
 }

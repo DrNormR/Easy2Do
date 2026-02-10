@@ -1,0 +1,33 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="400"
+        x:Class="Easy2Do.Views.TextAttachmentWindow"
+        Title="Text Attachment"
+        Width="420" Height="400"
+        MinWidth="300" MinHeight="250">
+
+  <Grid RowDefinitions="Auto,*,Auto" Margin="10">
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="4" Margin="0,0,0,6">
+      <Button x:Name="BulletButton" Content="&#x2022; List" FontSize="12" Padding="6,4" Click="OnBulletClick"/>
+      <Button x:Name="NumberButton" Content="1. List" FontSize="12" Padding="6,4" Click="OnNumberedClick"/>
+    </StackPanel>
+
+    <TextBox Grid.Row="1"
+             x:Name="EditorTextBox"
+             AcceptsReturn="True"
+             TextWrapping="Wrap"
+             FontSize="13"
+             Padding="8"
+             VerticalContentAlignment="Top"
+             Watermark="Type your notes here..."/>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,8,0,0">
+      <Button Content="Save &amp; Close" FontSize="12" Padding="12,6" Click="OnSaveClick"
+              Background="#FF4CAF50" Foreground="White" CornerRadius="3"/>
+      <Button Content="Cancel" FontSize="12" Padding="12,6" Click="OnCancelClick"
+              CornerRadius="3"/>
+    </StackPanel>
+  </Grid>
+</Window>

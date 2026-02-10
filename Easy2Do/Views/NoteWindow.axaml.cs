@@ -259,6 +259,24 @@ public partial class NoteWindow : Window
         }
     }
 
+    private async void OnAttachmentButtonClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button button && button.DataContext is TodoItem item)
+        {
+            var window = new TextAttachmentWindow(item.TextAttachment);
+            await window.ShowDialog(this);
+
+            if (window.IsSaved)
+            {
+                item.TextAttachment = window.AttachmentText;
+                if (DataContext is NoteViewModel vm)
+                {
+                    vm.Note.ModifiedDate = DateTime.Now;
+                }
+            }
+        }
+    }
+
     private void HideAllDropIndicators()
     {
         foreach (var desc in this.GetVisualDescendants())
