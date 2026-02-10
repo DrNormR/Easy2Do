@@ -6,7 +6,7 @@
         xmlns:views="using:Easy2Do.Views"
         mc:Ignorable="d" d:DesignWidth="380" d:DesignHeight="700"
         x:Class="Easy2Do.Views.MainWindow"
-        Icon="/Assets/avalonia-logo.ico"
+        Icon="/Assets/post-it-green.ico"
         Title="Easy2Do - Notes Manager"
         Width="380" Height="700"
         MinWidth="300" MinHeight="500">
