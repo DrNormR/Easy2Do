@@ -67,8 +67,13 @@ public partial class MainViewModel : ViewModelBase
 
     private void OnNotePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        // Ignore ModifiedDate changes to prevent infinite recursion
-        if (e.PropertyName != nameof(Note.ModifiedDate) && sender is Note note)
+        // Ignore ModifiedDate and window geometry changes to prevent excessive saves
+        if (e.PropertyName is nameof(Note.ModifiedDate) or 
+            nameof(Note.WindowX) or nameof(Note.WindowY) or 
+            nameof(Note.WindowWidth) or nameof(Note.WindowHeight))
+            return;
+
+        if (sender is Note note)
         {
             note.ModifiedDate = DateTime.Now;
             _ = SaveNotesAsync();

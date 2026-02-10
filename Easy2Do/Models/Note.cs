@@ -23,4 +23,16 @@ public partial class Note : ObservableObject
 
     [ObservableProperty]
     private DateTime _modifiedDate = DateTime.Now;
+
+    [ObservableProperty]
+    private double _windowX = double.NaN;
+
+    [ObservableProperty]
+    private double _windowY = double.NaN;
+
+    [ObservableProperty]
+    private double _windowWidth = double.NaN;
+
+    [ObservableProperty]
+    private double _windowHeight = double.NaN;
 }

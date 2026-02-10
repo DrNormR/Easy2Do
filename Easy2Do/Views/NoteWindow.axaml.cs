@@ -15,6 +15,39 @@ public partial class NoteWindow : Window
     public NoteWindow()
     {
         InitializeComponent();
+        Opened += OnWindowOpened;
+        Closing += OnWindowClosing;
+    }
+
+    private void OnWindowOpened(object? sender, EventArgs e)
+    {
+        if (DataContext is NoteViewModel vm)
+        {
+            var note = vm.Note;
+
+            if (!double.IsNaN(note.WindowWidth) && note.WindowWidth > 0)
+                Width = note.WindowWidth;
+            if (!double.IsNaN(note.WindowHeight) && note.WindowHeight > 0)
+                Height = note.WindowHeight;
+            if (!double.IsNaN(note.WindowX) && !double.IsNaN(note.WindowY))
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual;
+                Position = new PixelPoint((int)note.WindowX, (int)note.WindowY);
+            }
+        }
+    }
+
+    private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (DataContext is NoteViewModel vm)
+        {
+            var note = vm.Note;
+            note.WindowX = Position.X;
+            note.WindowY = Position.Y;
+            note.WindowWidth = Width;
+            note.WindowHeight = Height;
+            note.ModifiedDate = DateTime.Now;
+        }
     }
 
     private void OnTextBoxKeyDown(object? sender, KeyEventArgs e)
