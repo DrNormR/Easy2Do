@@ -8,8 +8,8 @@
         x:Class="Easy2Do.Views.NoteWindow"
         x:DataType="vm:NoteViewModel"
         Title="{Binding Note.Title}"
-        Width="400" Height="500"
-        MinWidth="300" MinHeight="400"
+        Width="360" Height="450"
+        MinWidth="280" MinHeight="350"
         Background="{Binding Note.Color}">
 
   <Window.Resources>
@@ -21,9 +21,12 @@
     <conv:BoolAndConverter x:Key="BoolAndConverter" />
     <conv:BoolToFontWeightConverter x:Key="ImportantFontWeight" />
     <conv:BoolToThicknessConverter x:Key="HeadingIndent" TrueThickness="6,5,0,5" FalseThickness="6,5,0,5" />
-    <conv:BoolToThicknessConverter x:Key="HeadingCheckIndent" TrueThickness="0,0,10,0" FalseThickness="14,0,10,0" />
-    <conv:BoolToThicknessConverter x:Key="HeadingTextIndent" TrueThickness="0,0,0,0" FalseThickness="14,0,0,0" />
+    <conv:BoolToThicknessConverter x:Key="HeadingCheckIndent" TrueThickness="0,0,3,0" FalseThickness="2,0,3,0" />
+    <conv:BoolToThicknessConverter x:Key="HeadingTextIndent" TrueThickness="0,0,0,0" FalseThickness="1,0,0,0" />
     <conv:BoolNotConverter x:Key="NotConverter" />
+    <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillChecked" Color="#999999"/>
+    <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" Color="#888888"/>
+    <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPressed" Color="#777777"/>
   </Window.Resources>
 
   <Design.DataContext>
@@ -34,15 +37,15 @@
     <!-- Title Section -->
     <Border Grid.Row="0" 
             Background="#33000000" 
-            Padding="15,10"
+            Padding="10,6"
             CornerRadius="5,5,0,0"
-            Margin="10,10,10,5">
+            Margin="8,8,8,3">
       <Grid ColumnDefinitions="*,Auto">
         <TextBox Grid.Column="0"
                  x:Name="TitleTextBox"
                  Text="{Binding Note.Title, UpdateSourceTrigger=PropertyChanged}"
                  FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
-                 FontSize="20"
+                 FontSize="16"
                  FontWeight="Normal"
                  BorderThickness="0"
                  Background="Transparent"
@@ -53,18 +56,92 @@
         
         <!-- Color Picker Menu -->
         <DropDownButton Grid.Column="1"
-                        Content="Color"
+                        Content="&#x1F3A8;"
+                        FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
                         FontSize="14"
-                        Padding="8">
+                        Padding="4"
+                        Background="Transparent"
+                        BorderThickness="0">
           <DropDownButton.Flyout>
             <MenuFlyout Placement="Bottom">
-              <MenuItem Header="Yellow" Command="{Binding ChangeColorCommand}" CommandParameter="#FFFFE680"/>
-              <MenuItem Header="Red" Command="{Binding ChangeColorCommand}" CommandParameter="#FFFF9999"/>
-              <MenuItem Header="Green" Command="{Binding ChangeColorCommand}" CommandParameter="#FF99FF99"/>
-              <MenuItem Header="Blue" Command="{Binding ChangeColorCommand}" CommandParameter="#FF99CCFF"/>
-              <MenuItem Header="Orange" Command="{Binding ChangeColorCommand}" CommandParameter="#FFFFCC99"/>
-              <MenuItem Header="Pink" Command="{Binding ChangeColorCommand}" CommandParameter="#FFFF99FF"/>
-              <MenuItem Header="Gray" Command="{Binding ChangeColorCommand}" CommandParameter="#FFCCCCCC"/>
+              <!-- White -->
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFFFFFFF">
+                <MenuItem.Header>
+                  <Border Background="#FFFFFFFF" Width="100" Height="18" CornerRadius="3" BorderBrush="#CCCCCC" BorderThickness="1"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <!-- Neons -->
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFFFE680">
+                <MenuItem.Header>
+                  <Border Background="#FFFFE680" Width="100" Height="18" CornerRadius="3"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFFF9999">
+                <MenuItem.Header>
+                  <Border Background="#FFFF9999" Width="100" Height="18" CornerRadius="3"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FF99FF99">
+                <MenuItem.Header>
+                  <Border Background="#FF99FF99" Width="100" Height="18" CornerRadius="3"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FF99CCFF">
+                <MenuItem.Header>
+                  <Border Background="#FF99CCFF" Width="100" Height="18" CornerRadius="3"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFFFCC99">
+                <MenuItem.Header>
+                  <Border Background="#FFFFCC99" Width="100" Height="18" CornerRadius="3"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFFF99FF">
+                <MenuItem.Header>
+                  <Border Background="#FFFF99FF" Width="100" Height="18" CornerRadius="3"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFCCCCCC">
+                <MenuItem.Header>
+                  <Border Background="#FFCCCCCC" Width="100" Height="18" CornerRadius="3"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <!-- Pastels -->
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFFFF3E0">
+                <MenuItem.Header>
+                  <Border Background="#FFFFF3E0" Width="100" Height="18" CornerRadius="3" BorderBrush="#666666" BorderThickness="1"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFE8F5E9">
+                <MenuItem.Header>
+                  <Border Background="#FFE8F5E9" Width="100" Height="18" CornerRadius="3" BorderBrush="#666666" BorderThickness="1"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFE3F2FD">
+                <MenuItem.Header>
+                  <Border Background="#FFE3F2FD" Width="100" Height="18" CornerRadius="3" BorderBrush="#666666" BorderThickness="1"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFF3E5F5">
+                <MenuItem.Header>
+                  <Border Background="#FFF3E5F5" Width="100" Height="18" CornerRadius="3" BorderBrush="#666666" BorderThickness="1"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFFCE4EC">
+                <MenuItem.Header>
+                  <Border Background="#FFFCE4EC" Width="100" Height="18" CornerRadius="3" BorderBrush="#666666" BorderThickness="1"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFFFF8E1">
+                <MenuItem.Header>
+                  <Border Background="#FFFFF8E1" Width="100" Height="18" CornerRadius="3" BorderBrush="#666666" BorderThickness="1"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFE0F7FA">
+                <MenuItem.Header>
+                  <Border Background="#FFE0F7FA" Width="100" Height="18" CornerRadius="3" BorderBrush="#666666" BorderThickness="1"/>
+                </MenuItem.Header>
+              </MenuItem>
             </MenuFlyout>
           </DropDownButton.Flyout>
         </DropDownButton>
@@ -73,16 +150,16 @@
 
     <!-- Separator -->
     <Border Grid.Row="1" 
-            Height="2" 
+            Height="1" 
             Background="#66000000" 
-            Margin="20,5,20,10"/>
+            Margin="16,3,16,6"/>
 
     <!-- Items List -->
-    <ScrollViewer Grid.Row="2" Margin="15,0,15,10">
+    <ScrollViewer Grid.Row="2" Margin="4,0,4,6">
       <ItemsControl x:Name="ItemsControl" ItemsSource="{Binding Note.Items}" x:CompileBindings="False" DragDrop.AllowDrop="True">
         <ItemsControl.ItemTemplate>
           <DataTemplate>
-            <Grid x:Name="ItemRow" ColumnDefinitions="Auto,Auto,Auto,*,Auto" ColumnSpacing="6" Margin="6,5,0,5"
+            <Grid x:Name="ItemRow" ColumnDefinitions="Auto,Auto,Auto,*,Auto" ColumnSpacing="1" Margin="2,3,0,3"
                   DragDrop.AllowDrop="True"
                   DragDrop.DragEnter="OnItemRowDragEnter"
                   DragDrop.DragOver="OnItemRowDragOver"
@@ -109,7 +186,7 @@
               <!-- Move Handle -->
               <Border x:Name="MoveHandle"
                       Grid.Column="0"
-                      Width="22"
+                      Width="16"
                       Background="Transparent"
                       Cursor="Hand"
                       HorizontalAlignment="Left"
@@ -121,23 +198,23 @@
                 </Border.Opacity>
                 <TextBlock Text="&#xE700;"
                            FontFamily="Segoe MDL2 Assets"
-                           FontSize="16"
+                           FontSize="13"
                            Foreground="#888888"
-                           Padding="2"
+                           Padding="1"
                            VerticalAlignment="Center"/>
               </Border>
               <!-- Important Button -->
               <Button x:Name="ImportantButton"
                       Grid.Column="1"
-                      Width="26"
+                      Width="20"
                       Content="&#x1F6A8;"
                       FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
                       HorizontalAlignment="Left"
                       Background="Transparent"
                       BorderThickness="0"
-                      FontSize="18"
-                      Padding="4"
-                      Margin="2,0,8,0"
+                      FontSize="14"
+                      Padding="2"
+                      Margin="0,0,2,0"
                       Foreground="{Binding IsImportant, Converter={StaticResource ImportantButtonBrush}}"
                       IsVisible="True"
                       Click="OnImportantButtonClick">
@@ -161,13 +238,18 @@
                         IsVisible="{Binding IsHeading, Converter={StaticResource NotConverter}}"
                         IsEnabled="{Binding IsHeading, Converter={StaticResource NotConverter}}"
                         VerticalAlignment="Center"
-                        Margin="{Binding IsHeading, Converter={StaticResource HeadingCheckIndent}}"/>
+                        Margin="{Binding IsHeading, Converter={StaticResource HeadingCheckIndent}}"
+                        RenderTransformOrigin="0.5,0.5">
+                <CheckBox.RenderTransform>
+                  <ScaleTransform ScaleX="0.9" ScaleY="0.9"/>
+                </CheckBox.RenderTransform>
+              </CheckBox>
               
               <!-- Item Text with conditional styling -->
               <StackPanel Grid.Column="3" Orientation="Horizontal">
                 <!-- Heading text -->
                 <TextBlock Text="{Binding Text}"
-                           FontSize="14"
+                           FontSize="12"
                            TextWrapping="Wrap"
                            VerticalAlignment="Center"
                            IsVisible="{Binding IsHeading}"
@@ -177,7 +259,7 @@
 
                 <!-- Show non-strikethrough text when not completed (non-heading) -->
                 <TextBlock Text="{Binding Text}"
-                           FontSize="14"
+                           FontSize="12"
                            TextWrapping="Wrap"
                            VerticalAlignment="Center"
                            FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}">
@@ -197,7 +279,7 @@
                 
                 <!-- Show strikethrough text when completed (non-heading) -->
                 <TextBlock Text="{Binding Text}"
-                           FontSize="14"
+                           FontSize="12"
                            TextWrapping="Wrap"
                            TextDecorations="Strikethrough"
                            VerticalAlignment="Center"
@@ -217,15 +299,15 @@
 
               <!-- Delete Button -->
               <Button Grid.Column="4"
-                      Width="20"
+                      Width="18"
                       Content="X"
                       Command="{Binding $parent[ItemsControl].DataContext.RemoveItemCommand}"
                       CommandParameter="{Binding}"
                       Background="Transparent"
                       BorderThickness="0"
-                      FontSize="12"
-                      Padding="5"
-                      Margin="5,0,20,0"
+                      FontSize="11"
+                      Padding="4"
+                      Margin="3,0,14,0"
                       Foreground="#D32F2F">
                 <Button.Opacity>
                   <MultiBinding Converter="{StaticResource BoolOrConverter}">
@@ -247,20 +329,20 @@
     <!-- Input Area -->
     <Border Grid.Row="3" 
             Background="#33000000" 
-            Padding="15"
+            Padding="10"
             CornerRadius="0,0,5,5"
-            Margin="10,5,10,10">
+            Margin="8,3,8,8">
       <Grid ColumnDefinitions="Auto,*,Auto">
         <ToggleButton Grid.Column="0"
-                      Width="36"
+                      Width="30"
                       Content="H"
                       FontWeight="Bold"
-                      FontSize="16"
+                      FontSize="13"
                       Background="#FFE0E0E0"
                       BorderBrush="#FFAAAAAA"
                       BorderThickness="1"
-                      Padding="6,8"
-                      Margin="0,0,8,0"
+                      Padding="4,6"
+                      Margin="0,0,6,0"
                       IsChecked="{Binding NewItemIsHeading, Mode=TwoWay}"/>
 
         <TextBox Grid.Column="1"
@@ -269,8 +351,9 @@
                  Background="White"
                  BorderBrush="#FFAAAAAA"
                  BorderThickness="1"
-                 Padding="8"
+                 Padding="6"
                  CornerRadius="3"
+                 FontSize="12"
                  KeyDown="OnTextBoxKeyDown"/>
         
         <Button Grid.Column="2"
@@ -278,10 +361,10 @@
                 Command="{Binding AddItemCommand}"
                 Background="#FF4CAF50"
                 Foreground="White"
-                Padding="10,8"
-                Margin="10,0,0,0"
+                Padding="8,6"
+                Margin="8,0,0,0"
                 CornerRadius="3"
-                FontSize="16"/>
+                FontSize="14"/>
       </Grid>
     </Border>
   </Grid>
