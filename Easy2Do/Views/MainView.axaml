@@ -3,27 +3,27 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:Easy2Do.ViewModels"
-             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             mc:Ignorable="d" d:DesignWidth="380" d:DesignHeight="700"
              x:Class="Easy2Do.Views.MainView"
              x:DataType="vm:MainViewModel">
   <Design.DataContext>
     <vm:MainViewModel />
   </Design.DataContext>
 
-  <Grid RowDefinitions="Auto,*" Margin="20">
+  <Grid RowDefinitions="Auto,*" Margin="12">
     <!-- Toolbar -->
-    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10" Margin="0,0,0,20">
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
       <Button Content="+ New Note" 
               Command="{Binding CreateNewNoteCommand}"
               Background="#FF4CAF50"
               Foreground="White"
-              Padding="15,10"
+              Padding="12,8"
               CornerRadius="5"/>
       <Button Content="Settings" 
               Command="{Binding OpenSettingsCommand}"
               Background="#FF2196F3"
               Foreground="White"
-              Padding="15,10"
+              Padding="12,8"
               CornerRadius="5"/>
     </StackPanel>
 
@@ -37,20 +37,21 @@
         <ItemsControl ItemsSource="{Binding Notes}">
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border Margin="10" 
-                      Padding="15" 
+              <Border Margin="6" 
+                      Padding="10" 
                       BorderBrush="#FFDDDDDD" 
                       BorderThickness="1" 
                       CornerRadius="5"
                       Background="#FFF9F9F9">
-                <Grid ColumnDefinitions="*,Auto">
+                <Grid RowDefinitions="Auto,Auto">
                   <!-- Note Info -->
-                  <StackPanel Grid.Column="0" Spacing="5">
+                  <StackPanel Grid.Row="0" Spacing="3">
                     <TextBlock Text="{Binding Title}" 
-                               FontSize="18" 
+                               FontSize="16" 
                                FontWeight="Normal"
-                               FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"/>
-                    <TextBlock FontSize="12" 
+                               FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                               TextTrimming="CharacterEllipsis"/>
+                    <TextBlock FontSize="11" 
                                Foreground="#FF666666"
                                FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
                       <Run Text="Items: "/>
@@ -61,9 +62,10 @@
                   </StackPanel>
 
                   <!-- Action Buttons -->
-                  <StackPanel Grid.Column="1" 
+                  <StackPanel Grid.Row="1" 
                               Orientation="Horizontal" 
-                              Spacing="5">
+                              Spacing="5"
+                              Margin="0,8,0,0">
                     <Button Content="Open" 
                             Command="{Binding $parent[ItemsControl].((vm:MainViewModel)DataContext).OpenNoteCommand}"
                             CommandParameter="{Binding}"
