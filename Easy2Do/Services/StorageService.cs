@@ -16,6 +16,7 @@ namespace Easy2Do.Services;
 public class StorageService : IDisposable
 {
     private readonly SettingsService _settingsService;
+    private readonly BackupService _backupService;
     private const string NotesFolder = "notes";
     private const string ManifestFile = "manifest.json";
     private const string LegacyFile = "notes.json";
@@ -48,6 +49,7 @@ public class StorageService : IDisposable
     public StorageService(SettingsService settingsService)
     {
         _settingsService = settingsService;
+        _backupService = new BackupService(settingsService);
     }
 
     private string GetNotesDirectory()
@@ -186,6 +188,7 @@ public class StorageService : IDisposable
             _isSelfWriting = true;
             var json = JsonSerializer.Serialize(note, JsonOptions);
             await File.WriteAllTextAsync(NoteFilePath(note.Id), json);
+            await _backupService.BackupNoteAsync(note.Id, json);
         }
         catch (Exception ex)
         {
@@ -205,6 +208,7 @@ public class StorageService : IDisposable
             var path = NoteFilePath(id);
             if (File.Exists(path))
                 File.Delete(path);
+            _backupService.DeleteBackupsForNote(id);
         }
         catch (Exception ex)
         {
