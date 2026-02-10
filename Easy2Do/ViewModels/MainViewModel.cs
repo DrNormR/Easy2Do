@@ -1,14 +1,16 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Controls;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Easy2Do.Models;
 using Easy2Do.Views;
-using Avalonia.Controls;
 
 namespace Easy2Do.ViewModels;
 
@@ -20,39 +22,41 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private Note? _selectedNote;
 
-    private bool _isSaving = false;
-    private bool _isLoading = false;
-    private CancellationTokenSource? _debounceCts;
+    private bool _isLoading;
+    private readonly Dictionary<Guid, CancellationTokenSource> _saveCtsMap = new();
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(500);
 
     public MainViewModel()
     {
-        // Load notes asynchronously
-        _ = LoadNotesAsync();
-        
-        // Subscribe to collection changes to auto-save
-        Notes.CollectionChanged += (s, e) => RequestSave();
+        _ = InitializeAsync();
     }
+
+    private async Task InitializeAsync()
+    {
+        await LoadNotesAsync();
+
+        // Start watching for external file changes (OneDrive / Dropbox)
+        App.StorageService.NoteFileChanged += OnExternalNoteChanged;
+        App.StorageService.NoteFileCreated += OnExternalNoteCreated;
+        App.StorageService.NoteFileDeleted += OnExternalNoteDeleted;
+        App.StorageService.StartWatching();
+    }
+
+    // ──────────────────────────── Load ────────────────────────────
 
     private async Task LoadNotesAsync()
     {
         _isLoading = true;
         try
         {
-            var loadedNotes = await App.StorageService.LoadNotesAsync();
-            
+            await App.StorageService.MigrateIfNeededAsync();
+            var loadedNotes = await App.StorageService.LoadAllNotesAsync();
+
             Notes.Clear();
             foreach (var note in loadedNotes)
             {
+                SubscribeNote(note);
                 Notes.Add(note);
-                
-                // Subscribe to property changes for auto-save
-                note.PropertyChanged += OnNotePropertyChanged;
-                note.Items.CollectionChanged += OnNoteItemsChanged;
-                foreach (var item in note.Items)
-                {
-                    item.PropertyChanged += OnItemPropertyChanged;
-                }
             }
         }
         finally
@@ -61,100 +65,192 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
+    // ──────────────────────────── Subscriptions ────────────────────────────
+
+    private void SubscribeNote(Note note)
+    {
+        note.PropertyChanged += OnNotePropertyChanged;
+        note.Items.CollectionChanged += OnNoteItemsChanged;
+        foreach (var item in note.Items)
+            item.PropertyChanged += OnItemPropertyChanged;
+    }
+
+    private void UnsubscribeNote(Note note)
+    {
+        note.PropertyChanged -= OnNotePropertyChanged;
+        note.Items.CollectionChanged -= OnNoteItemsChanged;
+        foreach (var item in note.Items)
+            item.PropertyChanged -= OnItemPropertyChanged;
+    }
+
+    // ──────────────────────────── Change handlers ────────────────────────────
+
     private void OnNotePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        // Ignore ModifiedDate to prevent recursive saves
-        if (e.PropertyName is nameof(Note.ModifiedDate))
-            return;
-
+        if (e.PropertyName is nameof(Note.ModifiedDate)) return;
         if (sender is Note note)
         {
             note.ModifiedDate = DateTime.Now;
-            RequestSave();
+            RequestSaveNote(note);
         }
     }
 
     private void OnNoteItemsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
-        if (sender is ObservableCollection<TodoItem> items)
-        {
-            // Find the note that owns this items collection
-            var note = Notes.FirstOrDefault(n => n.Items == items);
-            if (note != null)
-            {
-                if (e.NewItems != null)
-                {
-                    foreach (TodoItem item in e.NewItems)
-                    {
-                        item.PropertyChanged += OnItemPropertyChanged;
-                    }
-                }
+        if (sender is not ObservableCollection<TodoItem> items) return;
 
-                if (e.OldItems != null)
-                {
-                    foreach (TodoItem item in e.OldItems)
-                    {
-                        item.PropertyChanged -= OnItemPropertyChanged;
-                    }
-                }
+        var note = Notes.FirstOrDefault(n => n.Items == items);
+        if (note is null) return;
 
-                note.ModifiedDate = DateTime.Now;
-                RequestSave();
-            }
-        }
+        if (e.NewItems != null)
+            foreach (TodoItem item in e.NewItems)
+                item.PropertyChanged += OnItemPropertyChanged;
+
+        if (e.OldItems != null)
+            foreach (TodoItem item in e.OldItems)
+                item.PropertyChanged -= OnItemPropertyChanged;
+
+        note.ModifiedDate = DateTime.Now;
+        RequestSaveNote(note);
     }
 
     private void OnItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (sender is TodoItem item)
-        {
-            var note = Notes.FirstOrDefault(n => n.Items.Contains(item));
-            if (note != null)
-            {
-                note.ModifiedDate = DateTime.Now;
-                RequestSave();
-            }
-        }
+        if (sender is not TodoItem item) return;
+        var note = Notes.FirstOrDefault(n => n.Items.Contains(item));
+        if (note is null) return;
+
+        note.ModifiedDate = DateTime.Now;
+        RequestSaveNote(note);
     }
 
-    private void RequestSave()
+    // ──────────────────────────── Per-note debounced save ────────────────────────────
+
+    private void RequestSaveNote(Note note)
     {
         if (_isLoading) return;
 
-        _debounceCts?.Cancel();
-        _debounceCts = new CancellationTokenSource();
-        var token = _debounceCts.Token;
+        // Cancel any pending debounce for this note
+        if (_saveCtsMap.TryGetValue(note.Id, out var oldCts))
+            oldCts.Cancel();
 
-        _ = DebouncedSaveAsync(token);
+        var cts = new CancellationTokenSource();
+        _saveCtsMap[note.Id] = cts;
+
+        _ = DebouncedSaveNoteAsync(note, cts.Token);
     }
 
-    private async Task DebouncedSaveAsync(CancellationToken token)
+    private async Task DebouncedSaveNoteAsync(Note note, CancellationToken token)
     {
         try
         {
             await Task.Delay(DebounceDelay, token);
-            await SaveNotesNowAsync();
+            await App.StorageService.SaveNoteAsync(note);
+            await SaveManifestAsync();
         }
-        catch (TaskCanceledException)
-        {
-            // Debounce reset — a newer save is pending
-        }
+        catch (TaskCanceledException) { }
     }
 
-    private async Task SaveNotesNowAsync()
+    /// <summary>
+    /// Saves just the manifest (note ordering).
+    /// </summary>
+    private async Task SaveManifestAsync()
     {
-        if (_isSaving || _isLoading) return;
+        if (_isLoading) return;
+        var ids = Notes.Select(n => n.Id).ToList();
+        await App.StorageService.SaveManifestAsync(ids);
+    }
 
+    // ──────────────────────────── File watcher handlers ────────────────────────────
+
+    private void OnExternalNoteChanged(Guid id)
+    {
+        Dispatcher.UIThread.Post(() => _ = ReloadNoteFromDiskAsync(id));
+    }
+
+    private void OnExternalNoteCreated(Guid id)
+    {
+        Dispatcher.UIThread.Post(() => _ = HandleExternalCreateAsync(id));
+    }
+
+    private void OnExternalNoteDeleted(Guid id)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            var existing = Notes.FirstOrDefault(n => n.Id == id);
+            if (existing != null)
+            {
+                UnsubscribeNote(existing);
+                Notes.Remove(existing);
+            }
+        });
+    }
+
+    private async Task ReloadNoteFromDiskAsync(Guid id)
+    {
+        var freshNote = await App.StorageService.LoadNoteAsync(id);
+        if (freshNote is null) return;
+
+        var index = -1;
+        for (var i = 0; i < Notes.Count; i++)
+        {
+            if (Notes[i].Id == id) { index = i; break; }
+        }
+
+        if (index < 0) return;
+
+        _isLoading = true;
         try
         {
-            _isSaving = true;
-            await App.StorageService.SaveNotesAsync(Notes);
+            var old = Notes[index];
+            UnsubscribeNote(old);
+
+            // Copy data into the existing Note so open NoteWindows stay connected
+            old.Title = freshNote.Title;
+            old.Color = freshNote.Color;
+            old.CreatedDate = freshNote.CreatedDate;
+            old.ModifiedDate = freshNote.ModifiedDate;
+            old.WindowX = freshNote.WindowX;
+            old.WindowY = freshNote.WindowY;
+            old.WindowWidth = freshNote.WindowWidth;
+            old.WindowHeight = freshNote.WindowHeight;
+
+            // Replace items
+            foreach (var item in old.Items)
+                item.PropertyChanged -= OnItemPropertyChanged;
+            old.Items.Clear();
+            foreach (var item in freshNote.Items)
+                old.Items.Add(item);
+
+            SubscribeNote(old);
         }
         finally
         {
-            _isSaving = false;
+            _isLoading = false;
         }
     }
+
+    private async Task HandleExternalCreateAsync(Guid id)
+    {
+        // Skip if we already have it
+        if (Notes.Any(n => n.Id == id)) return;
+
+        var note = await App.StorageService.LoadNoteAsync(id);
+        if (note is null) return;
+
+        _isLoading = true;
+        try
+        {
+            SubscribeNote(note);
+            Notes.Add(note);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ──────────────────────────── Commands ────────────────────────────
 
     [RelayCommand]
     private async Task CreateNewNote()
@@ -164,14 +260,12 @@ public partial class MainViewModel : ViewModelBase
             Title = "New Note",
             Color = "#FFFFE680"
         };
-        
-        // Subscribe to property changes for auto-save
-        newNote.PropertyChanged += OnNotePropertyChanged;
-        newNote.Items.CollectionChanged += OnNoteItemsChanged;
-        
+
+        SubscribeNote(newNote);
         Notes.Add(newNote);
         newNote.ModifiedDate = DateTime.Now;
-        await SaveNotesNowAsync();
+        await App.StorageService.SaveNoteAsync(newNote);
+        await SaveManifestAsync();
         OpenNote(newNote);
     }
 
@@ -180,43 +274,41 @@ public partial class MainViewModel : ViewModelBase
     {
         if (note != null && Notes.Contains(note))
         {
+            UnsubscribeNote(note);
             Notes.Remove(note);
-            await SaveNotesNowAsync();
+            await App.StorageService.DeleteNoteFileAsync(note.Id);
+            await SaveManifestAsync();
         }
     }
 
     [RelayCommand]
     private async Task DuplicateNote(Note? note)
     {
-        if (note != null)
-        {
-            var duplicatedNote = new Note
-            {
-                Title = note.Title + " (Copy)",
-                Color = note.Color
-            };
+        if (note is null) return;
 
-            foreach (var item in note.Items)
-            {
-                duplicatedNote.Items.Add(new TodoItem
-                {
-                    Text = item.Text,
-                    IsCompleted = item.IsCompleted
-                });
-            }
-
-            // Subscribe to property changes for auto-save
-            duplicatedNote.PropertyChanged += OnNotePropertyChanged;
-        duplicatedNote.Items.CollectionChanged += OnNoteItemsChanged;
-        foreach (var item in duplicatedNote.Items)
+        var dup = new Note
         {
-            item.PropertyChanged += OnItemPropertyChanged;
+            Title = note.Title + " (Copy)",
+            Color = note.Color
+        };
+
+        foreach (var item in note.Items)
+        {
+            dup.Items.Add(new TodoItem
+            {
+                Text = item.Text,
+                IsCompleted = item.IsCompleted,
+                IsHeading = item.IsHeading,
+                IsImportant = item.IsImportant,
+                TextAttachment = item.TextAttachment
+            });
         }
 
-            Notes.Add(duplicatedNote);
-            duplicatedNote.ModifiedDate = DateTime.Now;
-            await SaveNotesNowAsync();
-        }
+        SubscribeNote(dup);
+        Notes.Add(dup);
+        dup.ModifiedDate = DateTime.Now;
+        await App.StorageService.SaveNoteAsync(dup);
+        await SaveManifestAsync();
     }
 
     [RelayCommand]

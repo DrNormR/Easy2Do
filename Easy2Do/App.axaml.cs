@@ -54,10 +54,17 @@ public partial class App : Application
 
     private async void OnExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
     {
-        // Save notes when application closes
+        StorageService.StopWatching();
+
+        // Save all notes when application closes
         if (MainWindow?.DataContext is MainViewModel viewModel)
         {
-            await StorageService.SaveNotesAsync(viewModel.Notes);
+            foreach (var note in viewModel.Notes)
+            {
+                await StorageService.SaveNoteAsync(note);
+            }
+            var ids = viewModel.Notes.Select(n => n.Id).ToList();
+            await StorageService.SaveManifestAsync(ids);
         }
     }
 
