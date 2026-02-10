@@ -155,7 +155,8 @@
             Margin="16,3,16,6"/>
 
     <!-- Items List -->
-    <ScrollViewer Grid.Row="2" Margin="4,0,4,6" Focusable="True" PointerPressed="OnBackgroundPointerPressed">
+    <ScrollViewer Grid.Row="2" Margin="4,0,4,6" Focusable="True" PointerPressed="OnBackgroundPointerPressed"
+                  HorizontalScrollBarVisibility="Disabled">
       <ItemsControl x:Name="ItemsControl" ItemsSource="{Binding Note.Items}" x:CompileBindings="False" DragDrop.AllowDrop="True">
         <ItemsControl.ItemTemplate>
           <DataTemplate>
