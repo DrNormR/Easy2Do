@@ -56,7 +56,7 @@
                                FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
                       <Run Text="Items: "/>
                       <Run Text="{Binding Items.Count}"/>
-                      <Run Text=" • Modified: "/>
+                      <Run Text=" &#x2022; Modified: "/>
                       <Run Text="{Binding ModifiedDate, StringFormat='{}{0:g}'}"/>
                     </TextBlock>
                   </StackPanel>
