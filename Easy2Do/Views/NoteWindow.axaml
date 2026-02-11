@@ -177,7 +177,7 @@
       <ItemsControl x:Name="ItemsControl" ItemsSource="{Binding Note.Items}" x:CompileBindings="False" DragDrop.AllowDrop="True">
         <ItemsControl.ItemTemplate>
           <DataTemplate>
-            <Grid x:Name="ItemRow" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="1" Margin="2,3,0,3"
+            <Grid x:Name="ItemRow" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="1" Margin="2,0,0,0"
                   DragDrop.AllowDrop="True"
                   DragDrop.DragEnter="OnItemRowDragEnter"
                   DragDrop.DragOver="OnItemRowDragOver"
