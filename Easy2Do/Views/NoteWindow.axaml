@@ -45,7 +45,7 @@
         <TextBox Grid.Column="0"
                  x:Name="TitleTextBox"
                  Text="{Binding Note.Title, UpdateSourceTrigger=PropertyChanged}"
-                 FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                 FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
                  FontSize="16"
                  FontWeight="Normal"
                  BorderThickness="0"
@@ -58,7 +58,7 @@
         <!-- Pin Button -->
         <Button Grid.Column="1"
                 Command="{Binding TogglePinCommand}"
-                FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
                 FontSize="14"
                 Padding="4"
                 Background="Transparent"
@@ -74,7 +74,7 @@
         <!-- Color Picker Menu -->
         <DropDownButton Grid.Column="2"
                         Content="&#x1F3A8;"
-                        FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                        FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
                         FontSize="14"
                         Padding="4"
                         Background="Transparent"
@@ -177,7 +177,7 @@
       <ItemsControl x:Name="ItemsControl" ItemsSource="{Binding Note.Items}" x:CompileBindings="False" DragDrop.AllowDrop="True">
         <ItemsControl.ItemTemplate>
           <DataTemplate>
-            <Grid x:Name="ItemRow" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="1" Margin="2,0,0,0"
+            <Grid x:Name="ItemRow" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="1" Margin="2,3,0,3"
                   DragDrop.AllowDrop="True"
                   DragDrop.DragEnter="OnItemRowDragEnter"
                   DragDrop.DragOver="OnItemRowDragOver"
@@ -214,8 +214,7 @@
                     <Binding Path="#ItemRow.IsPointerOver" />
                   </MultiBinding>
                 </Border.Opacity>
-                <TextBlock Text="&#xE700;"
-                           FontFamily="Segoe MDL2 Assets"
+                <TextBlock Text="&#x2630;"
                            FontSize="13"
                            Foreground="#888888"
                            Padding="1"
@@ -226,7 +225,7 @@
                       Grid.Column="1"
                       Width="20"
                       Content="&#x1F6A8;"
-                      FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                      FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
                       HorizontalAlignment="Left"
                       Background="Transparent"
                       BorderThickness="0"
@@ -364,7 +363,7 @@
                       Grid.Column="4"
                       Width="18"
                       Content="&#x1F4CE;"
-                      FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                      FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
                       Background="Transparent"
                       BorderThickness="0"
                       FontSize="13"
@@ -386,35 +385,35 @@
                 </Button.IsHitTestVisible>
               </Button>
 
-              <!-- Due Date Button -->
-              <Button x:Name="DueDateButton"
-                      Grid.Column="5"
-                      Width="18"
-                      Content="&#x1F4C5;"
-                      FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
-                      Background="Transparent"
-                      BorderThickness="0"
-                      FontSize="13"
-                      Padding="2"
-                      Margin="0,0,0,0"
-                      Foreground="#555555"
-                      Click="OnDueDateButtonClick">
-                <Button.Opacity>
-                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
-                    <Binding Path="HasDueDate" />
-                    <Binding Path="#ItemRow.IsPointerOver" />
-                  </MultiBinding>
-                </Button.Opacity>
-                <Button.IsHitTestVisible>
-                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
-                    <Binding Path="HasDueDate" />
-                    <Binding Path="#ItemRow.IsPointerOver" />
-                  </MultiBinding>
-                </Button.IsHitTestVisible>
-              </Button>
+<!-- Due Date Button -->
+<Button x:Name="DueDateButton"
+        Grid.Column="5"
+        Width="18"
+        Content="&#x1F4C5;"
+        FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
+        Background="Transparent"
+        BorderThickness="0"
+        FontSize="13"
+        Padding="2"
+        Margin="0,0,0,0"
+        Foreground="#555555"
+        Click="OnDueDateButtonClick">
+  <Button.Opacity>
+    <MultiBinding Converter="{StaticResource BoolOrConverter}">
+      <Binding Path="HasDueDate" />
+      <Binding Path="#ItemRow.IsPointerOver" />
+    </MultiBinding>
+  </Button.Opacity>
+  <Button.IsHitTestVisible>
+    <MultiBinding Converter="{StaticResource BoolOrConverter}">
+      <Binding Path="HasDueDate" />
+      <Binding Path="#ItemRow.IsPointerOver" />
+    </MultiBinding>
+  </Button.IsHitTestVisible>
+</Button>
 
-              <!-- Delete Button -->
-              <Button Grid.Column="6"
+<!-- Delete Button -->
+<Button Grid.Column="6"
                       Width="18"
                       Content="X"
                       Command="{Binding $parent[ItemsControl].DataContext.RemoveItemCommand}"

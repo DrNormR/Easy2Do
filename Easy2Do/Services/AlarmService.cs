@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using Avalonia.Threading;
@@ -60,7 +61,7 @@ public class AlarmService : IDisposable
                 System.Diagnostics.Debug.WriteLine(
                     $"[AlarmService]   Item '{item.Text}' DueDate={item.DueDate:g} " +
                     $"Completed={item.IsCompleted} Dismissed={item.IsAlarmDismissed} " +
-                    $"Snooze={item.SnoozeUntil:g} IsPast={item.DueDate <= now}");
+                    $"Snooze={item.SnoozeUntil:g} IsPast={item.DueDate.HasValue && item.DueDate.Value <= now}");
 
                 if (item.IsCompleted || item.IsAlarmDismissed) continue;
                 if (item.DueDate!.Value > now) continue;
@@ -97,10 +98,47 @@ public class AlarmService : IDisposable
             {
                 PlaySound("SystemExclamation", IntPtr.Zero, SND_ALIAS | SND_ASYNC);
             }
+            else if (OperatingSystem.IsMacOS())
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "afplay",
+                    Arguments = "/System/Library/Sounds/Glass.aiff",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                });
+            }
+            else if (OperatingSystem.IsLinux())
+            {
+                // Try paplay (PulseAudio) first, then aplay (ALSA)
+                var played = TryRunProcess("paplay", "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga")
+                          || TryRunProcess("aplay", "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga");
+            }
         }
         catch
         {
             // Sound is best-effort
+        }
+    }
+
+    private static bool TryRunProcess(string fileName, string arguments)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = true
+            };
+            var process = Process.Start(psi);
+            return process != null;
+        }
+        catch
+        {
+            return false;
         }
     }
 

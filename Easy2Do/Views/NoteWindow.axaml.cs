@@ -277,25 +277,25 @@ public partial class NoteWindow : Window
         }
     }
 
-    private async void OnDueDateButtonClick(object? sender, RoutedEventArgs e)
+private async void OnDueDateButtonClick(object? sender, RoutedEventArgs e)
+{
+    if (sender is Button button && button.DataContext is TodoItem item)
     {
-        if (sender is Button button && button.DataContext is TodoItem item)
-        {
-            var window = new DueDatePickerWindow(item.DueDate);
-            await window.ShowDialog(this);
+        var window = new DueDatePickerWindow(item.DueDate);
+        await window.ShowDialog(this);
 
-            if (window.IsSet)
+        if (window.IsSet)
+        {
+            item.DueDate = window.SelectedDueDate;
+            if (DataContext is NoteViewModel vm)
             {
-                item.DueDate = window.SelectedDueDate;
-                if (DataContext is NoteViewModel vm)
-                {
-                    vm.Note.ModifiedDate = DateTime.Now;
-                }
+                vm.Note.ModifiedDate = DateTime.Now;
             }
         }
     }
+}
 
-    private void HideAllDropIndicators()
+private void HideAllDropIndicators()
     {
         foreach (var desc in this.GetVisualDescendants())
         {
