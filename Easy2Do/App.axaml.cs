@@ -15,6 +15,7 @@ public partial class App : Application
     public static MainWindow? MainWindow { get; private set; }
     public static SettingsService SettingsService { get; private set; } = null!;
     public static StorageService StorageService { get; private set; } = null!;
+    public static AlarmService AlarmService { get; private set; } = null!;
 
     public override void Initialize()
     {
@@ -23,6 +24,7 @@ public partial class App : Application
         // Initialize services
         SettingsService = new SettingsService();
         StorageService = new StorageService(SettingsService);
+        AlarmService = new AlarmService();
     }
 
     public override void OnFrameworkInitializationCompleted()
@@ -37,7 +39,11 @@ public partial class App : Application
                 DataContext = new MainViewModel()
             };
             desktop.MainWindow = MainWindow;
-            
+
+            // Start alarm service to monitor due dates
+            var viewModel = (MainViewModel)MainWindow.DataContext!;
+            AlarmService.Start(() => viewModel.Notes);
+
             // Handle application exit to save notes
             desktop.Exit += OnExit;
         }
@@ -54,6 +60,7 @@ public partial class App : Application
 
     private async void OnExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
     {
+        AlarmService.Stop();
         StorageService.StopWatching();
 
         // Save all notes when application closes

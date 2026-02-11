@@ -277,6 +277,24 @@ public partial class NoteWindow : Window
         }
     }
 
+    private async void OnDueDateButtonClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button button && button.DataContext is TodoItem item)
+        {
+            var window = new DueDatePickerWindow(item.DueDate);
+            await window.ShowDialog(this);
+
+            if (window.IsSet)
+            {
+                item.DueDate = window.SelectedDueDate;
+                if (DataContext is NoteViewModel vm)
+                {
+                    vm.Note.ModifiedDate = DateTime.Now;
+                }
+            }
+        }
+    }
+
     private void HideAllDropIndicators()
     {
         foreach (var desc in this.GetVisualDescendants())

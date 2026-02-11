@@ -177,7 +177,7 @@
       <ItemsControl x:Name="ItemsControl" ItemsSource="{Binding Note.Items}" x:CompileBindings="False" DragDrop.AllowDrop="True">
         <ItemsControl.ItemTemplate>
           <DataTemplate>
-            <Grid x:Name="ItemRow" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto" ColumnSpacing="1" Margin="2,3,0,3"
+            <Grid x:Name="ItemRow" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="1" Margin="2,3,0,3"
                   DragDrop.AllowDrop="True"
                   DragDrop.DragEnter="OnItemRowDragEnter"
                   DragDrop.DragOver="OnItemRowDragOver"
@@ -185,7 +185,7 @@
                   DragDrop.Drop="OnItemRowDrop"
                   Background="{Binding IsImportant, Converter={StaticResource ImportantRowBrush}}">
               <Border x:Name="DropIndicatorBefore"
-                      Grid.ColumnSpan="6"
+                      Grid.ColumnSpan="7"
                       Height="3"
                       Background="#888888"
                       VerticalAlignment="Top"
@@ -193,7 +193,7 @@
                       IsVisible="False"
                       IsHitTestVisible="False"/>
               <Border x:Name="DropIndicatorAfter"
-                      Grid.ColumnSpan="6"
+                      Grid.ColumnSpan="7"
                       Height="3"
                       Background="#888888"
                       VerticalAlignment="Bottom"
@@ -386,8 +386,35 @@
                 </Button.IsHitTestVisible>
               </Button>
 
+              <!-- Due Date Button -->
+              <Button x:Name="DueDateButton"
+                      Grid.Column="5"
+                      Width="18"
+                      Content="&#x1F4C5;"
+                      FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                      Background="Transparent"
+                      BorderThickness="0"
+                      FontSize="13"
+                      Padding="2"
+                      Margin="0,0,0,0"
+                      Foreground="#555555"
+                      Click="OnDueDateButtonClick">
+                <Button.Opacity>
+                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
+                    <Binding Path="HasDueDate" />
+                    <Binding Path="#ItemRow.IsPointerOver" />
+                  </MultiBinding>
+                </Button.Opacity>
+                <Button.IsHitTestVisible>
+                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
+                    <Binding Path="HasDueDate" />
+                    <Binding Path="#ItemRow.IsPointerOver" />
+                  </MultiBinding>
+                </Button.IsHitTestVisible>
+              </Button>
+
               <!-- Delete Button -->
-              <Button Grid.Column="5"
+              <Button Grid.Column="6"
                       Width="18"
                       Content="X"
                       Command="{Binding $parent[ItemsControl].DataContext.RemoveItemCommand}"
