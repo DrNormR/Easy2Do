@@ -252,6 +252,59 @@ public partial class MainViewModel : ViewModelBase
 
     // ──────────────────────────── Commands ────────────────────────────
 
+    /// <summary>
+    /// Reloads a note from a restored Note object. If it already exists in the
+    /// collection, updates it in-place; otherwise adds it.
+    /// </summary>
+    public async Task ReloadOrAddNoteAsync(Note restoredNote)
+    {
+        var existing = Notes.FirstOrDefault(n => n.Id == restoredNote.Id);
+        if (existing != null)
+        {
+            _isLoading = true;
+            try
+            {
+                UnsubscribeNote(existing);
+
+                existing.Title = restoredNote.Title;
+                existing.Color = restoredNote.Color;
+                existing.CreatedDate = restoredNote.CreatedDate;
+                existing.ModifiedDate = restoredNote.ModifiedDate;
+                existing.WindowX = restoredNote.WindowX;
+                existing.WindowY = restoredNote.WindowY;
+                existing.WindowWidth = restoredNote.WindowWidth;
+                existing.WindowHeight = restoredNote.WindowHeight;
+                existing.IsPinned = restoredNote.IsPinned;
+
+                foreach (var item in existing.Items)
+                    item.PropertyChanged -= OnItemPropertyChanged;
+                existing.Items.Clear();
+                foreach (var item in restoredNote.Items)
+                    existing.Items.Add(item);
+
+                SubscribeNote(existing);
+            }
+            finally
+            {
+                _isLoading = false;
+            }
+        }
+        else
+        {
+            _isLoading = true;
+            try
+            {
+                SubscribeNote(restoredNote);
+                Notes.Add(restoredNote);
+            }
+            finally
+            {
+                _isLoading = false;
+            }
+            await SaveManifestAsync();
+        }
+    }
+
     [RelayCommand]
     private async Task CreateNewNote()
     {

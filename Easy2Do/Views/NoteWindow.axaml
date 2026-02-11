@@ -45,7 +45,7 @@
         <TextBox Grid.Column="0"
                  x:Name="TitleTextBox"
                  Text="{Binding Note.Title, UpdateSourceTrigger=PropertyChanged}"
-                 FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                 FontFamily="Segoe UI Emoji, Noto Color Emoji, Segoe UI Symbol, Segoe UI, sans-serif"
                  FontSize="16"
                  FontWeight="Normal"
                  BorderThickness="0"
@@ -58,7 +58,7 @@
         <!-- Pin Button -->
         <Button Grid.Column="1"
                 Command="{Binding TogglePinCommand}"
-                FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                FontFamily="Segoe UI Emoji, Noto Color Emoji, Segoe UI Symbol, Segoe UI, sans-serif"
                 FontSize="14"
                 Padding="4"
                 Background="Transparent"
@@ -74,7 +74,7 @@
         <!-- Color Picker Menu -->
         <DropDownButton Grid.Column="2"
                         Content="&#x1F3A8;"
-                        FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                        FontFamily="Segoe UI Emoji, Noto Color Emoji, Segoe UI Symbol, Segoe UI, sans-serif"
                         FontSize="14"
                         Padding="4"
                         Background="Transparent"
@@ -214,8 +214,7 @@
                     <Binding Path="#ItemRow.IsPointerOver" />
                   </MultiBinding>
                 </Border.Opacity>
-                <TextBlock Text="&#xE700;"
-                           FontFamily="Segoe MDL2 Assets"
+                <TextBlock Text="&#x2630;"
                            FontSize="13"
                            Foreground="#888888"
                            Padding="1"
@@ -226,7 +225,7 @@
                       Grid.Column="1"
                       Width="20"
                       Content="&#x1F6A8;"
-                      FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                      FontFamily="Segoe UI Emoji, Noto Color Emoji, Segoe UI Symbol, Segoe UI, sans-serif"
                       HorizontalAlignment="Left"
                       Background="Transparent"
                       BorderThickness="0"
@@ -364,7 +363,7 @@
                       Grid.Column="4"
                       Width="18"
                       Content="&#x1F4CE;"
-                      FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                      FontFamily="Segoe UI Emoji, Noto Color Emoji, Segoe UI Symbol, Segoe UI, sans-serif"
                       Background="Transparent"
                       BorderThickness="0"
                       FontSize="13"
@@ -391,7 +390,7 @@
                       Grid.Column="5"
                       Width="18"
                       Content="&#x1F4C5;"
-                      FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                      FontFamily="Segoe UI Emoji, Noto Color Emoji, Segoe UI Symbol, Segoe UI, sans-serif"
                       Background="Transparent"
                       BorderThickness="0"
                       FontSize="13"

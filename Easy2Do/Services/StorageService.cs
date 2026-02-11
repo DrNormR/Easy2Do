@@ -46,6 +46,8 @@ public class StorageService : IDisposable
         WriteIndented = true
     };
 
+    public BackupService BackupService => _backupService;
+
     public StorageService(SettingsService settingsService)
     {
         _settingsService = settingsService;
@@ -337,6 +339,38 @@ public class StorageService : IDisposable
         if (string.IsNullOrEmpty(fileName)) return false;
         var name = Path.GetFileNameWithoutExtension(fileName);
         return Guid.TryParse(name, out id);
+    }
+
+    /// <summary>
+    /// Restores a note from a backup file, overwriting the current version on disk.
+    /// Returns the restored Note, or null on failure.
+    /// </summary>
+    public async Task<Note?> RestoreNoteFromBackupAsync(string backupFilePath)
+    {
+        try
+        {
+            var json = await _backupService.ReadBackupAsync(backupFilePath);
+            if (string.IsNullOrEmpty(json))
+                return null;
+
+            var note = JsonSerializer.Deserialize<Note>(json, JsonOptions);
+            if (note is null)
+                return null;
+
+            // Overwrite the current note file with the backup content
+            EnsureNotesDirectory();
+            _isSelfWriting = true;
+            await File.WriteAllTextAsync(NoteFilePath(note.Id), json);
+            _isSelfWriting = false;
+
+            return note;
+        }
+        catch (Exception ex)
+        {
+            _isSelfWriting = false;
+            Console.WriteLine($"Error restoring from backup: {ex.Message}");
+            return null;
+        }
     }
 
     public void Dispose()

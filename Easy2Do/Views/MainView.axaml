@@ -49,11 +49,11 @@
                     <TextBlock Text="{Binding Title}" 
                                FontSize="16" 
                                FontWeight="Normal"
-                               FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI"
+                               FontFamily="Segoe UI Emoji, Noto Color Emoji, Segoe UI Symbol, Segoe UI, sans-serif"
                                TextTrimming="CharacterEllipsis"/>
                     <TextBlock FontSize="11" 
                                Foreground="#FF666666"
-                               FontFamily="Segoe UI Emoji, Segoe UI Symbol, Segoe UI">
+                               FontFamily="Segoe UI Emoji, Noto Color Emoji, Segoe UI Symbol, Segoe UI, sans-serif">
                       <Run Text="Items: "/>
                       <Run Text="{Binding Items.Count}"/>
                       <Run Text=" &#x2022; Modified: "/>

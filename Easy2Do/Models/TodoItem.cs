@@ -45,36 +45,12 @@ public partial class TodoItem : ObservableObject
         get => _dueDate;
         set
         {
-            var hadValue = _dueDate;
             if (SetProperty(ref _dueDate, value))
             {
                 OnPropertyChanged(nameof(HasDueDate));
-                // Only reset alarm state when the user changes the due date,
-                // not when deserializing from JSON (old value would be null on first load)
-                if (hadValue.HasValue && hadValue != value)
-                {
-                    IsAlarmDismissed = false;
-                    SnoozeUntil = null;
-                }
             }
         }
     }
 
     public bool HasDueDate => _dueDate.HasValue;
-
-    private bool _isAlarmDismissed;
-
-    public bool IsAlarmDismissed
-    {
-        get => _isAlarmDismissed;
-        set => SetProperty(ref _isAlarmDismissed, value);
-    }
-
-    private DateTime? _snoozeUntil;
-
-    public DateTime? SnoozeUntil
-    {
-        get => _snoozeUntil;
-        set => SetProperty(ref _snoozeUntil, value);
-    }
 }

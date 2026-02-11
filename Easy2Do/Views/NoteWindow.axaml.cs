@@ -284,9 +284,9 @@ public partial class NoteWindow : Window
             var window = new DueDatePickerWindow(item.DueDate);
             await window.ShowDialog(this);
 
-            if (window.IsSet)
+            if (window.IsSaved)
             {
-                item.DueDate = window.SelectedDueDate;
+                item.DueDate = window.SelectedDate;
                 if (DataContext is NoteViewModel vm)
                 {
                     vm.Note.ModifiedDate = DateTime.Now;

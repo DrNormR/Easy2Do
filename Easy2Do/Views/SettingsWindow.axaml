@@ -74,13 +74,44 @@
         </StackPanel>
       </Border>
 
+      <!-- Restore from Backup Section -->
       <Border BorderBrush="#FFCCCCCC" 
               BorderThickness="1" 
               CornerRadius="5"
               Padding="15"
               Background="#FFF9F9F9">
         <StackPanel Spacing="10">
-          <Button Content="About Easy2Do" 
+          <TextBlock Text="Restore from Backup" 
+                     FontSize="16" 
+                     FontWeight="SemiBold"/>
+
+          <TextBlock Text="Select a backup file to restore a previous version of a note:"
+                     FontSize="12"
+                     Foreground="#FF666666"
+                     TextWrapping="Wrap"/>
+
+          <Button Content="Browse Backups..." 
+                  Command="{Binding RestoreFromBackupCommand}"
+                  Padding="15,8"
+                  Background="#FF9C27B0"
+                  Foreground="White"
+                  CornerRadius="5"/>
+
+          <TextBlock Text="{Binding RestoreStatusMessage}"
+                     FontSize="12"
+                     Foreground="#FF388E3C"
+                     TextWrapping="Wrap"
+                     IsVisible="{Binding RestoreStatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+        </StackPanel>
+      </Border>
+
+      <Border BorderBrush="#FFCCCCCC" 
+              BorderThickness="1" 
+              CornerRadius="5"
+              Padding="15"
+              Background="#FFF9F9F9">
+        <StackPanel Spacing="10">
+          <Button Content="About Easy2Do"
                   Command="{Binding ShowAboutCommand}"
                   HorizontalAlignment="Left"
                   Padding="20,10"

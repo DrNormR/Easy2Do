@@ -148,6 +148,63 @@ public class BackupService
         }
     }
 
+    /// <summary>
+    /// Returns the path to the backups directory so callers can browse it.
+    /// </summary>
+    public string GetBackupsDirectoryPath()
+    {
+        EnsureBackupsDirectory();
+        return GetBackupsDirectory();
+    }
+
+    /// <summary>
+    /// Returns all available backup entries grouped by note ID, newest first.
+    /// </summary>
+    public List<BackupEntry> GetAllBackupEntries()
+    {
+        var dir = GetBackupsDirectory();
+        if (!Directory.Exists(dir))
+            return new List<BackupEntry>();
+
+        return Directory.GetFiles(dir, "*.json")
+            .Select(f =>
+            {
+                var name = Path.GetFileNameWithoutExtension(f);
+                var lastDot = name.LastIndexOf('.');
+                if (lastDot < 0) return null;
+
+                var guidStr = name[..lastDot];
+                if (!Guid.TryParse(guidStr, out var noteId)) return null;
+
+                var timestamp = ParseTimestamp(f);
+                if (!timestamp.HasValue) return null;
+
+                return new BackupEntry(noteId, timestamp.Value, f);
+            })
+            .Where(e => e != null)
+            .Cast<BackupEntry>()
+            .OrderByDescending(e => e.Timestamp)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Reads the JSON content of a backup file.
+    /// </summary>
+    public async Task<string?> ReadBackupAsync(string backupFilePath)
+    {
+        try
+        {
+            if (!File.Exists(backupFilePath))
+                return null;
+            return await File.ReadAllTextAsync(backupFilePath);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error reading backup: {ex.Message}");
+            return null;
+        }
+    }
+
     private static DateTime? ParseTimestamp(string filePath)
     {
         // Filename format: {guid}.{yyyyMMdd-HHmmss}.json
@@ -165,4 +222,6 @@ public class BackupService
     }
 
     private record BackupFile(string FilePath, DateTime? Timestamp);
+
+    public record BackupEntry(Guid NoteId, DateTime Timestamp, string FilePath);
 }

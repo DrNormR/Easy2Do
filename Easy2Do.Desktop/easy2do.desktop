@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Easy2Do
+Comment=Sticky notes and to-do lists
+Exec=Easy2Do.Desktop
+Icon=easy2do
+Terminal=false
+Type=Application
+Categories=Utility;Office;
+StartupWMClass=Easy2Do
