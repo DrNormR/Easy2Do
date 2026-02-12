@@ -8,4 +8,9 @@ public partial class SettingsWindow : Window
     {
         InitializeComponent();
     }
+
+    private void OnRestoreBackupButtonClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        System.Diagnostics.Debug.WriteLine("Restore Backup button clicked!");
+    }
 }

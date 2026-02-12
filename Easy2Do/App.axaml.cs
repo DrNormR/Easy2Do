@@ -16,15 +16,16 @@ public partial class App : Application
     public static SettingsService SettingsService { get; private set; } = null!;
     public static StorageService StorageService { get; private set; } = null!;
     public static AlarmService AlarmService { get; private set; } = null!;
+    public static BackupService BackupService { get; private set; } = null!;
 
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
-        
         // Initialize services
         SettingsService = new SettingsService();
         StorageService = new StorageService(SettingsService);
         AlarmService = new AlarmService();
+        BackupService = new BackupService(SettingsService);
     }
 
     public override void OnFrameworkInitializationCompleted()

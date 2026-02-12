@@ -18,7 +18,9 @@ public partial class SettingsViewModel : ViewModelBase
 
     public SettingsViewModel()
     {
+        System.Diagnostics.Debug.WriteLine("SettingsViewModel constructed");
         StorageLocation = App.SettingsService.GetStorageLocation();
+        _restoreBackupCommand = new AsyncRelayCommand(RestoreBackup);
     }
 
     [RelayCommand]
@@ -79,6 +81,66 @@ public partial class SettingsViewModel : ViewModelBase
             {
                 System.Diagnostics.Process.Start("xdg-open", location);
             }
+        }
+    }
+
+    public IRelayCommand RestoreBackupCommand {
+        get {
+            System.Diagnostics.Debug.WriteLine("RestoreBackupCommand property getter called");
+            return _restoreBackupCommand;
+        }
+    }
+    private readonly IRelayCommand _restoreBackupCommand;
+
+    private async Task RestoreBackup()
+    {
+        System.Diagnostics.Debug.WriteLine("RestoreBackup method called");
+        if (App.MainWindow != null)
+        {
+            var topLevel = Avalonia.Controls.TopLevel.GetTopLevel(App.MainWindow);
+            if (topLevel != null)
+            {
+                System.Diagnostics.Debug.WriteLine("Opening file picker for backup file...");
+                var files = await topLevel.StorageProvider.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
+                {
+                    Title = "Select Backup File",
+                    AllowMultiple = false,
+                    FileTypeFilter = new[]
+                    {
+                        new Avalonia.Platform.Storage.FilePickerFileType("Backup Files")
+                        {
+                            Patterns = new[] { "*.bak", "*.json" }
+                        }
+                    }
+                });
+                System.Diagnostics.Debug.WriteLine($"File picker returned {files.Count} files.");
+                if (files.Count > 0)
+                {
+                    var selectedPath = files[0].Path.LocalPath;
+                    System.Diagnostics.Debug.WriteLine($"Selected backup file: {selectedPath}");
+                    await App.BackupService.RestoreBackupAsync(selectedPath);
+                    System.Diagnostics.Debug.WriteLine("Called RestoreBackupAsync on BackupService.");
+                    // Reload notes in main view
+                    if (App.MainWindow?.DataContext is Easy2Do.ViewModels.MainViewModel mainVm)
+                    {
+                        System.Diagnostics.Debug.WriteLine("Reloading notes in MainViewModel...");
+                        await mainVm.LoadNotesAsync();
+                        System.Diagnostics.Debug.WriteLine("Notes reloaded.");
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("No backup file selected.");
+                }
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("TopLevel is null.");
+            }
+        }
+        else
+        {
+            System.Diagnostics.Debug.WriteLine("App.MainWindow is null.");
         }
     }
 }

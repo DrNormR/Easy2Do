@@ -44,17 +44,18 @@ public partial class MainViewModel : ViewModelBase
 
     // ──────────────────────────── Load ────────────────────────────
 
-    private async Task LoadNotesAsync()
+    public async Task LoadNotesAsync()
     {
         _isLoading = true;
         try
         {
             await App.StorageService.MigrateIfNeededAsync();
             var loadedNotes = await App.StorageService.LoadAllNotesAsync();
-
+            System.Diagnostics.Debug.WriteLine($"LoadNotesAsync: loaded {loadedNotes.Count} notes.");
             Notes.Clear();
             foreach (var note in loadedNotes)
             {
+                System.Diagnostics.Debug.WriteLine($"Loaded note: {note.Id} - {note.Title}");
                 SubscribeNote(note);
                 Notes.Add(note);
             }

@@ -165,11 +165,28 @@ public class StorageService : IDisposable
         try
         {
             var path = NoteFilePath(id);
+            System.Diagnostics.Debug.WriteLine($"LoadNoteAsync: loading note file {path}");
             if (!File.Exists(path))
+            {
+                System.Diagnostics.Debug.WriteLine($"LoadNoteAsync: file does not exist for note {id}");
                 return null;
-
+            }
             var json = await File.ReadAllTextAsync(path);
-            return JsonSerializer.Deserialize<Note>(json, JsonOptions);
+            System.Diagnostics.Debug.WriteLine($"LoadNoteAsync: file content length {json.Length} for note {id}");
+            try
+            {
+                var note = JsonSerializer.Deserialize<Note>(json, JsonOptions);
+                if (note == null)
+                    System.Diagnostics.Debug.WriteLine($"LoadNoteAsync: failed to deserialize note {id}");
+                else
+                    System.Diagnostics.Debug.WriteLine($"LoadNoteAsync: deserialized note {id} - {note.Title}");
+                return note;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"LoadNoteAsync: exception for note {id}: {ex.Message}");
+                return null;
+            }
         }
         catch (Exception ex)
         {

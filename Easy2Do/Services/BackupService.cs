@@ -164,5 +164,72 @@ public class BackupService
         return null;
     }
 
+    /// <summary>
+    /// Restores a backup file by copying it to the main storage location and updates the manifest.
+    /// </summary>
+    public async Task RestoreBackupAsync(string backupFilePath)
+    {
+        try
+        {
+            System.Diagnostics.Debug.WriteLine($"RestoreBackupAsync called with backupFilePath: {backupFilePath}");
+            // Determine the note ID from the backup file name
+            var fileName = Path.GetFileName(backupFilePath);
+            var noteIdPart = fileName?.Split('.')?.FirstOrDefault();
+            System.Diagnostics.Debug.WriteLine($"Parsed noteIdPart: {noteIdPart}");
+            if (noteIdPart == null || !Guid.TryParse(noteIdPart, out var noteId))
+            {
+                System.Diagnostics.Debug.WriteLine("Invalid backup file name format.");
+                throw new InvalidOperationException("Invalid backup file name format.");
+            }
+            System.Diagnostics.Debug.WriteLine($"Parsed noteId: {noteId}");
+
+            // Read backup content
+            var noteJson = await File.ReadAllTextAsync(backupFilePath);
+            System.Diagnostics.Debug.WriteLine($"Read backup file content, length: {noteJson.Length}");
+
+            // Get main storage directory (parent of backups)
+            var backupDir = Path.GetDirectoryName(backupFilePath);
+            var storageDir = Directory.GetParent(backupDir)?.FullName;
+            if (storageDir == null)
+            {
+                System.Diagnostics.Debug.WriteLine("Could not determine main storage directory.");
+                return;
+            }
+            System.Diagnostics.Debug.WriteLine($"Determined main storage directory: {storageDir}");
+
+            // Write to main notes directory
+            var notesDir = Path.Combine(storageDir, "notes");
+            if (!Directory.Exists(notesDir)) Directory.CreateDirectory(notesDir);
+            var noteFilePath = Path.Combine(notesDir, $"{noteId}.json");
+            await File.WriteAllTextAsync(noteFilePath, noteJson);
+            System.Diagnostics.Debug.WriteLine($"Wrote note file to: {noteFilePath}");
+
+            // Update manifest to include this note
+            var manifestPath = Path.Combine(storageDir, "manifest.json");
+            List<Guid> noteIds = new();
+            if (File.Exists(manifestPath))
+            {
+                var manifestJson = await File.ReadAllTextAsync(manifestPath);
+                noteIds = System.Text.Json.JsonSerializer.Deserialize<List<Guid>>(manifestJson) ?? new();
+                System.Diagnostics.Debug.WriteLine($"Loaded manifest, count: {noteIds.Count}");
+            }
+            if (!noteIds.Contains(noteId))
+            {
+                noteIds.Add(noteId);
+                var updatedManifest = System.Text.Json.JsonSerializer.Serialize(noteIds);
+                await File.WriteAllTextAsync(manifestPath, updatedManifest);
+                System.Diagnostics.Debug.WriteLine($"Updated manifest with noteId: {noteId}");
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"Manifest already contains noteId: {noteId}");
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Restore error: {ex.Message}");
+        }
+    }
+
     private record BackupFile(string FilePath, DateTime? Timestamp);
 }

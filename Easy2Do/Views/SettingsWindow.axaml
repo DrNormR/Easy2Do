@@ -12,10 +12,6 @@
         WindowStartupLocation="CenterOwner"
         CanResize="False">
 
-  <Design.DataContext>
-    <vm:SettingsViewModel />
-  </Design.DataContext>
-
   <Grid Margin="20">
     <StackPanel Spacing="15">
       <TextBlock Text="Settings" 
@@ -62,6 +58,14 @@
                     Command="{Binding OpenStorageFolderCommand}"
                     Padding="15,8"
                     Background="#FFFF9800"
+                    Foreground="White"
+                    CornerRadius="5"/>
+            
+            <Button Content="Restore Backup"
+                    Command="{Binding RestoreBackupCommand}"
+                    IsEnabled="True"
+                    Padding="15,8"
+                    Background="#FFD32F2F"
                     Foreground="White"
                     CornerRadius="5"/>
           </StackPanel>
