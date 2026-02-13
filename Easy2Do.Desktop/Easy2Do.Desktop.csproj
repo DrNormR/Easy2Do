@@ -5,11 +5,14 @@
     See https://docs.avaloniaui.net/docs/guides/platforms/platform-specific-code/dotnet for more details.-->
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
-	  <ApplicationIcon>../Easy2Do/Assets/post-it-green.ico</ApplicationIcon>
+    <RuntimeIdentifiers>win-x64;linux-x64</RuntimeIdentifiers>
+    <!-- ApplicationIcon is Windows-only, so exclude for Linux builds -->
+    <ApplicationIcon Condition=" '$(RuntimeIdentifier)' == 'win-x64' ">../Easy2Do/Assets/post-it-green.ico</ApplicationIcon>
   </PropertyGroup>
 
   <PropertyGroup>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- ApplicationManifest is Windows-only, so exclude for Linux builds -->
+    <ApplicationManifest Condition=" '$(RuntimeIdentifier)' == 'win-x64' ">app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>

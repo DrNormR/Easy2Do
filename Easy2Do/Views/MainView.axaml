@@ -25,6 +25,13 @@
               Foreground="White"
               Padding="12,8"
               CornerRadius="5"/>
+      <Button Content="⟳ Refresh"
+              Command="{Binding RefreshMainCommand}"
+              Background="#FF888888"
+              Foreground="White"
+              Padding="12,8"
+              CornerRadius="5"
+              ToolTip.Tip="Refresh notes list"/>
     </StackPanel>
 
     <!-- Notes List -->

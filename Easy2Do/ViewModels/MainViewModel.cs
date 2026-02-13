@@ -343,5 +343,11 @@ public partial class MainViewModel : ViewModelBase
             settingsWindow.Show();
         }
     }
+
+    [RelayCommand]
+    private async Task RefreshMain()
+    {
+        await LoadNotesAsync();
+    }
 }
 
