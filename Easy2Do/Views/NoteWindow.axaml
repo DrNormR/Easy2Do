@@ -30,6 +30,40 @@
     <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPressed" Color="#777777"/>
   </Window.Resources>
 
+  <Window.Styles>
+    <Style Selector="TextBox.inline-editor">
+      <Style.Resources>
+        <SolidColorBrush x:Key="TextControlBackground" Color="#00FFFFFF"/>
+        <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#33FFFFFF"/>
+        <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#CCFFFFFF"/>
+        <SolidColorBrush x:Key="TextControlForeground" Color="#FF222222"/>
+        <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FF222222"/>
+        <SolidColorBrush x:Key="TextControlBorderBrush" Color="#00000000"/>
+        <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#33000000"/>
+        <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#66000000"/>
+      </Style.Resources>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="#FF222222"/>
+      <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+
+    <!-- Keep in-place editors readable in dark theme -->
+    <Style Selector="TextBox.inline-editor:focus-within">
+      <Setter Property="Background" Value="#CCFFFFFF"/>
+      <Setter Property="Foreground" Value="#FF222222"/>
+      <Setter Property="BorderBrush" Value="#66000000"/>
+      <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+
+    <Style Selector="TextBox.inline-editor:focus">
+      <Setter Property="Background" Value="#CCFFFFFF"/>
+      <Setter Property="Foreground" Value="#FF222222"/>
+      <Setter Property="BorderBrush" Value="#66000000"/>
+      <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+
+  </Window.Styles>
+
   <Design.DataContext>
     <vm:NoteViewModel />
   </Design.DataContext>
@@ -44,12 +78,12 @@
       <Grid ColumnDefinitions="*,Auto,Auto,Auto">
         <TextBox Grid.Column="0"
                  x:Name="TitleTextBox"
+                 Classes="inline-editor"
                  Text="{Binding Note.Title, UpdateSourceTrigger=PropertyChanged}"
                  FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
                  FontSize="16"
                  FontWeight="Normal"
-                 BorderThickness="0"
-                 Background="Transparent"
+                 Foreground="#FF222222"
                  Watermark="Note Title..."
                  GotFocus="OnTitleTextBoxGotFocus"
                  PointerPressed="OnTitleTextBoxPointerPressed"
@@ -275,6 +309,7 @@
               <Grid Grid.Column="3">
                 <!-- Heading text -->
                 <TextBox Text="{Binding Text}"
+                         Classes="inline-editor"
                          FontSize="16"
                          TextWrapping="Wrap"
                          VerticalAlignment="Center"
@@ -282,8 +317,6 @@
                          Foreground="{Binding IsImportant, Converter={StaticResource ImportantBrush}}"
                          FontWeight="Bold"
                          Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"
-                         Background="Transparent"
-                         BorderThickness="0"
                          Padding="0"
                          MinHeight="0"
                          GotFocus="OnItemTextBoxGotFocus"
@@ -291,12 +324,11 @@
 
                 <!-- Show non-strikethrough text when not completed (non-heading) -->
                 <TextBox Text="{Binding Text}"
+                         Classes="inline-editor"
                          FontSize="12"
                          TextWrapping="Wrap"
                          VerticalAlignment="Center"
                          FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"
-                         Background="Transparent"
-                         BorderThickness="0"
                          Padding="0"
                          MinHeight="0"
                          GotFocus="OnItemTextBoxGotFocus"
@@ -318,13 +350,12 @@
                 <!-- Show strikethrough text when completed (non-heading) -->
                 <Grid>
                   <TextBox Text="{Binding Text}"
+                           Classes="inline-editor"
                            FontSize="12"
                            TextWrapping="Wrap"
                            VerticalAlignment="Center"
                            FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"
                            Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"
-                           Background="Transparent"
-                           BorderThickness="0"
                            Padding="0"
                            MinHeight="0"
                            GotFocus="OnItemTextBoxGotFocus"
