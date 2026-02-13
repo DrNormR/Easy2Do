@@ -41,7 +41,7 @@
             Padding="10,6"
             CornerRadius="5,5,0,0"
             Margin="8,8,8,3">
-      <Grid ColumnDefinitions="*,Auto,Auto">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto">
         <TextBox Grid.Column="0"
                  x:Name="TitleTextBox"
                  Text="{Binding Note.Title, UpdateSourceTrigger=PropertyChanged}"
@@ -70,9 +70,18 @@
                        IsVisible="{Binding Note.IsPinned}"/>
           </Panel>
         </Button>
+        <!-- Refresh Button -->
+        <Button Grid.Column="2"
+                Command="{Binding RefreshNoteCommand}"
+                Content="&#x21bb;"
+                FontSize="14"
+                Padding="4"
+                Background="Transparent"
+                BorderThickness="0"
+                ToolTip.Tip="Refresh Note"/>
 
         <!-- Color Picker Menu -->
-        <DropDownButton Grid.Column="2"
+        <DropDownButton Grid.Column="3"
                         Content="&#x1F3A8;"
                         FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
                         FontSize="14"

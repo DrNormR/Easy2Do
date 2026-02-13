@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Easy2Do.Models;
@@ -66,5 +67,28 @@ public partial class NoteViewModel : ViewModelBase
     {
         Note.IsPinned = !Note.IsPinned;
         Note.ModifiedDate = DateTime.Now;
+    }
+
+    [RelayCommand]
+    private async Task RefreshNote()
+    {
+        // Reload note from disk
+        var reloaded = await Easy2Do.App.StorageService.LoadNoteAsync(Note.Id);
+        if (reloaded != null)
+        {
+            // Update all properties
+            Note.Title = reloaded.Title;
+            Note.Color = reloaded.Color;
+            Note.CreatedDate = reloaded.CreatedDate;
+            Note.ModifiedDate = reloaded.ModifiedDate;
+            Note.IsPinned = reloaded.IsPinned;
+            Note.WindowX = reloaded.WindowX;
+            Note.WindowY = reloaded.WindowY;
+            Note.WindowWidth = reloaded.WindowWidth;
+            Note.WindowHeight = reloaded.WindowHeight;
+            Note.Items.Clear();
+            foreach (var item in reloaded.Items)
+                Note.Items.Add(item);
+        }
     }
 }
