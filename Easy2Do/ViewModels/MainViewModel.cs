@@ -16,6 +16,12 @@ namespace Easy2Do.ViewModels;
 
 public partial class MainViewModel : ViewModelBase
 {
+    private static readonly string[] NoteColors = new[]
+    {
+        "#FFFFE680", "#FFFF9999", "#FF99FF99", "#FF99CCFF", "#FFFFCC99", "#FFFF99FF", "#FFCCCCCC",
+        "#FFFFF3E0", "#FFE8F5E9", "#FFE3F2FD", "#FFF3E5F5", "#FFFCE4EC", "#FFFFF8E1", "#FFE0F7FA"
+    };
+    private static readonly Random _random = new();
     [ObservableProperty]
     private ObservableCollection<Note> _notes = new();
 
@@ -259,7 +265,7 @@ public partial class MainViewModel : ViewModelBase
         var newNote = new Note
         {
             Title = "New Note",
-            Color = "#FFFFE680"
+            Color = NoteColors[_random.Next(NoteColors.Length)]
         };
 
         SubscribeNote(newNote);
