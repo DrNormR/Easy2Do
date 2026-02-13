@@ -60,7 +60,7 @@
                                TextTrimming="CharacterEllipsis"/>
                     <TextBlock FontSize="11"
                                Foreground="#FF666666"
-                               FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif">
+                               FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif, Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol">
                       <Run Text="Items: "/>
                       <Run Text="{Binding Items.Count}"/>
                       <Run Text=" &#x2022; Modified: "/>
