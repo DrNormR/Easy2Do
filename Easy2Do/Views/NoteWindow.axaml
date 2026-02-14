@@ -319,6 +319,7 @@
                          Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"
                          Padding="0"
                          MinHeight="0"
+                         FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
                          GotFocus="OnItemTextBoxGotFocus"
                          KeyDown="OnItemTextBoxKeyDown"/>
 
@@ -331,6 +332,7 @@
                          FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"
                          Padding="0"
                          MinHeight="0"
+                         FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
                          GotFocus="OnItemTextBoxGotFocus"
                          KeyDown="OnItemTextBoxKeyDown">
                   <TextBox.Margin>
@@ -358,6 +360,7 @@
                            Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"
                            Padding="0"
                            MinHeight="0"
+                           FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
                            GotFocus="OnItemTextBoxGotFocus"
                            KeyDown="OnItemTextBoxKeyDown">
                     <TextBox.IsVisible>
@@ -377,6 +380,7 @@
                              FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"
                              Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"
                              Padding="0"
+                             FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
                              Foreground="Transparent"
                              IsHitTestVisible="False">
                     <TextBlock.IsVisible>
