@@ -319,7 +319,7 @@
                          Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"
                          Padding="0"
                          MinHeight="0"
-                         FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
+                         FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif, Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol"
                          GotFocus="OnItemTextBoxGotFocus"
                          KeyDown="OnItemTextBoxKeyDown"/>
 
@@ -332,7 +332,7 @@
                          FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"
                          Padding="0"
                          MinHeight="0"
-                         FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
+                         FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif, Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol"
                          GotFocus="OnItemTextBoxGotFocus"
                          KeyDown="OnItemTextBoxKeyDown">
                   <TextBox.Margin>
@@ -360,7 +360,7 @@
                            Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"
                            Padding="0"
                            MinHeight="0"
-                           FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
+                           FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif, Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol"
                            GotFocus="OnItemTextBoxGotFocus"
                            KeyDown="OnItemTextBoxKeyDown">
                     <TextBox.IsVisible>
@@ -380,7 +380,7 @@
                              FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"
                              Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"
                              Padding="0"
-                             FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
+                             FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif, Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol"
                              Foreground="Transparent"
                              IsHitTestVisible="False">
                     <TextBlock.IsVisible>
