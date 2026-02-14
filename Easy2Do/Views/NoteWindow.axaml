@@ -202,6 +202,8 @@
                   <Border Background="#FFE0F7FA" Width="100" Height="18" CornerRadius="3" BorderBrush="#666666" BorderThickness="1"/>
                 </MenuItem.Header>
               </MenuItem>
+              <Separator />
+              <MenuItem Header="Custom..." Click="OnCustomColorMenuItemClick"/>
             </MenuFlyout>
           </DropDownButton.Flyout>
         </DropDownButton>

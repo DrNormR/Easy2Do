@@ -161,6 +161,20 @@ public partial class NoteWindow : Window
         }
     }
 
+    private async void OnCustomColorMenuItemClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is NoteViewModel vm)
+        {
+            var picker = new ColorPickerWindow(vm.Note.Color);
+            await picker.ShowDialog(this);
+
+            if (picker.IsSaved)
+            {
+                vm.ChangeColorCommand.Execute(picker.SelectedColorHex);
+            }
+        }
+    }
+
     private const string DragItemFormat = "todo-item";
 
     private async void OnMoveHandlePointerPressed(object? sender, PointerPressedEventArgs e)
