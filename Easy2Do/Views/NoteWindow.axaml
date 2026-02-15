@@ -80,7 +80,7 @@
                  x:Name="TitleTextBox"
                  Classes="inline-editor"
                  Text="{Binding Note.Title, UpdateSourceTrigger=PropertyChanged}"
-                 FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
+                 FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif, Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol"
                  FontSize="16"
                  FontWeight="Normal"
                  Foreground="#FF222222"
