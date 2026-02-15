@@ -50,7 +50,10 @@ public partial class ColorPickerWindow : Window
             return;
         }
 
-        TryApplyHex(HexTextBox.Text);
+        if (TryParseHexColor(HexTextBox.Text, out var color))
+        {
+            ColorView.Color = color;
+        }
     }
 
     private void OnHexTextBoxKeyDown(object? sender, KeyEventArgs e)
@@ -66,11 +69,42 @@ public partial class ColorPickerWindow : Window
 
     private void TryApplyHex(string hex)
     {
-        if (Color.TryParse(hex.Trim(), out var color))
+        if (TryParseHexColor(hex, out var color))
         {
             ColorView.Color = color;
             SetHexText(color);
         }
+    }
+
+    private static bool TryParseHexColor(string input, out Color color)
+    {
+        color = default;
+
+        var hex = input.Trim();
+        if (hex.StartsWith('#'))
+        {
+            hex = hex[1..];
+        }
+
+        if (hex.Length != 6 && hex.Length != 8)
+        {
+            return false;
+        }
+
+        foreach (var c in hex)
+        {
+            if (!char.IsAsciiHexDigit(c))
+            {
+                return false;
+            }
+        }
+
+        if (hex.Length == 6)
+        {
+            hex = $"FF{hex}";
+        }
+
+        return Color.TryParse($"#{hex}", out color);
     }
 
     private void SetHexText(Color color)
