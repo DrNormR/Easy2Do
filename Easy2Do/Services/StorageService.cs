@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Easy2Do.Models;
 
@@ -23,6 +24,12 @@ public class StorageService : IDisposable
 
     private FileSystemWatcher? _watcher;
     private bool _isSelfWriting;
+
+    // Polling fallback to catch changes missed by FileSystemWatcher (e.g., cloud sync behavior)
+    private Timer? _pollTimer;
+    private readonly Dictionary<Guid, DateTime> _knownFileWriteTimes = new();
+    private readonly object _lock = new();
+    private const int PollIntervalMs = 3000;
 
     /// <summary>
     /// Fired on the thread-pool when an external change is detected for a specific note file.
@@ -319,6 +326,28 @@ public class StorageService : IDisposable
         _watcher.Created += OnFileCreated;
         _watcher.Deleted += OnFileDeleted;
         _watcher.Renamed += OnFileRenamed;
+
+        // Initialize known file timestamps for polling
+        lock (_lock)
+        {
+            _knownFileWriteTimes.Clear();
+            foreach (var file in Directory.GetFiles(notesDir, "*.json"))
+            {
+                var name = Path.GetFileNameWithoutExtension(file);
+                if (Guid.TryParse(name, out var id))
+                {
+                    try
+                    {
+                        var ts = File.GetLastWriteTimeUtc(file);
+                        _knownFileWriteTimes[id] = ts;
+                    }
+                    catch { }
+                }
+            }
+        }
+
+        // Start polling timer as a fallback for cloud syncs that may bypass FS events
+        _pollTimer = new Timer(_ => PollDirectory(), null, PollIntervalMs, PollIntervalMs);
     }
 
     public void StopWatching()
@@ -332,6 +361,12 @@ public class StorageService : IDisposable
             _watcher.Renamed -= OnFileRenamed;
             _watcher.Dispose();
             _watcher = null;
+        }
+
+        if (_pollTimer != null)
+        {
+            _pollTimer.Dispose();
+            _pollTimer = null;
         }
     }
 
@@ -362,6 +397,64 @@ public class StorageService : IDisposable
         // Treat rename-in as creation of the new name
         if (TryParseNoteId(e.Name, out var id))
             NoteFileCreated?.Invoke(id);
+    }
+
+    private void PollDirectory()
+    {
+        try
+        {
+            var notesDir = GetNotesDirectory();
+            if (!Directory.Exists(notesDir)) return;
+
+            var currentFiles = Directory.GetFiles(notesDir, "*.json");
+            var currentSet = new HashSet<Guid>();
+
+            lock (_lock)
+            {
+                // Check for created or changed files
+                foreach (var file in currentFiles)
+                {
+                    var name = Path.GetFileNameWithoutExtension(file);
+                    if (!Guid.TryParse(name, out var id)) continue;
+                    currentSet.Add(id);
+                    DateTime lastWrite;
+                    try { lastWrite = File.GetLastWriteTimeUtc(file); }
+                    catch { continue; }
+
+                    if (_knownFileWriteTimes.TryGetValue(id, out var known))
+                    {
+                        if (lastWrite > known && !_isSelfWriting)
+                        {
+                            _knownFileWriteTimes[id] = lastWrite;
+                            NoteFileChanged?.Invoke(id);
+                        }
+                    }
+                    else
+                    {
+                        // New file
+                        _knownFileWriteTimes[id] = lastWrite;
+                        if (!_isSelfWriting)
+                            NoteFileCreated?.Invoke(id);
+                    }
+                }
+
+                // Check for deleted files
+                var knownIds = _knownFileWriteTimes.Keys.ToList();
+                foreach (var knownId in knownIds)
+                {
+                    if (!currentSet.Contains(knownId))
+                    {
+                        _knownFileWriteTimes.Remove(knownId);
+                        if (!_isSelfWriting)
+                            NoteFileDeleted?.Invoke(knownId);
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // ignore polling errors
+        }
     }
 
     private static bool TryParseNoteId(string? fileName, out Guid id)
