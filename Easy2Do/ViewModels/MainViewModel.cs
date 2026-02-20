@@ -156,6 +156,12 @@ public partial class MainViewModel : ViewModelBase
             await SaveManifestAsync();
         }
         catch (TaskCanceledException) { }
+        catch (InvalidOperationException ex)
+        {
+            // Version conflict detected
+            await ShowConflictMessageAsync(note, ex.Message);
+            await ReloadNoteFromDiskAsync(note.Id);
+        }
     }
 
     /// <summary>
@@ -354,6 +360,37 @@ public partial class MainViewModel : ViewModelBase
     private async Task RefreshMain()
     {
         await LoadNotesAsync();
+    }
+    private async Task ShowConflictMessageAsync(Note note, string message)
+    {
+        // This is a simple Avalonia dialog. You can replace it with a more advanced dialog if desired.
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var window = Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+                ? desktop.Windows.FirstOrDefault(w => w.DataContext is NoteViewModel vm && vm.Note.Id == note.Id)
+                : null;
+            if (window != null)
+            {
+                var dlg = new Avalonia.Controls.Window
+                {
+                    Title = "Sync Conflict",
+                    Width = 350,
+                    Height = 120,
+                    Content = new Avalonia.Controls.StackPanel
+                    {
+                        Margin = new Avalonia.Thickness(20),
+                        Children =
+                        {
+                            new Avalonia.Controls.TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap },
+                            new Avalonia.Controls.Button { Content = "OK", HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, Margin = new Avalonia.Thickness(0,10,0,0), MinWidth = 60 }
+                        }
+                    }
+                };
+                var okButton = ((Avalonia.Controls.StackPanel)dlg.Content).Children.OfType<Avalonia.Controls.Button>().First();
+                okButton.Click += (_, __) => dlg.Close();
+                await dlg.ShowDialog(window);
+            }
+        });
     }
 }
 

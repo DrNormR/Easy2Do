@@ -202,14 +202,30 @@ public class StorageService : IDisposable
         try
         {
             EnsureNotesDirectory();
-            _isSelfWriting = true;
-            var json = JsonSerializer.Serialize(note, JsonOptions);
-            await File.WriteAllTextAsync(NoteFilePath(note.Id), json);
-            await _backupService.BackupNoteAsync(note.Id, json);
+            var path = NoteFilePath(note.Id);
+            DateTime? fileLastWrite = null;
+            if (File.Exists(path))
+            {
+                fileLastWrite = File.GetLastWriteTimeUtc(path);
+            }
+            // Only allow save if file is unchanged or does not exist
+            if (fileLastWrite == null || Math.Abs((fileLastWrite.Value - note.ModifiedDate.ToUniversalTime()).TotalSeconds) < 2)
+            {
+                note.ModifiedDate = DateTime.UtcNow;
+                _isSelfWriting = true;
+                var json = JsonSerializer.Serialize(note, JsonOptions);
+                await File.WriteAllTextAsync(path, json);
+                await _backupService.BackupNoteAsync(note.Id, json);
+            }
+            else
+            {
+                throw new InvalidOperationException("The note has been modified elsewhere. Please reload before saving.");
+            }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error saving note {note.Id}: {ex.Message}");
+            throw;
         }
         finally
         {
