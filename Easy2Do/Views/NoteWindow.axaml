@@ -69,7 +69,12 @@
     <vm:NoteViewModel />
   </Design.DataContext>
 
-  <Grid RowDefinitions="Auto,Auto,*,Auto" Focusable="True" PointerPressed="OnBackgroundPointerPressed">
+  <Grid>
+    <Grid x:Name="EditorGrid"
+          RowDefinitions="Auto,Auto,*,Auto"
+          Focusable="True"
+          PointerPressed="OnBackgroundPointerPressed"
+          IsEnabled="{Binding IsEditable}">
     <!-- Title Section -->
     <Border Grid.Row="0" 
             Background="#33000000" 
@@ -528,6 +533,34 @@
                 CornerRadius="3"
                 FontSize="14"/>
       </Grid>
+    </Border>
+    </Grid>
+
+    <Border IsVisible="{Binding IsLocked}"
+            Background="#AA111111"
+            Margin="10"
+            CornerRadius="8"
+            Padding="14"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Top">
+      <StackPanel Spacing="10">
+        <TextBlock Text="{Binding LockMessage}"
+                   Foreground="White"
+                   FontSize="14"
+                   TextWrapping="Wrap"/>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="Take Over"
+                  Click="OnTakeOverClick"
+                  Background="#FF4CAF50"
+                  Foreground="White"
+                  Padding="12,6"/>
+          <Button Content="Refresh Lock"
+                  Click="OnRefreshLockClick"
+                  Background="#FF757575"
+                  Foreground="White"
+                  Padding="12,6"/>
+        </StackPanel>
+      </StackPanel>
     </Border>
   </Grid>
 </Window>

@@ -8,6 +8,7 @@ using Easy2Do.Models;
 using Avalonia.VisualTree;
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace Easy2Do.Views;
 
@@ -17,6 +18,9 @@ public partial class NoteWindow : Window
     private static readonly Dictionary<Guid, List<NoteWindow>> OpenWindows = new();
     // Note ID for this window
     private Guid? _noteId;
+    private bool _holdsLock;
+    private bool _lockRefreshInProgress;
+    private readonly DispatcherTimer _lockMonitorTimer = new() { Interval = TimeSpan.FromSeconds(3) };
 
     public NoteWindow()
     {
@@ -27,6 +31,7 @@ public partial class NoteWindow : Window
         // Subscribe to external note file changes
         Easy2Do.App.StorageService.NoteFileChanged += OnExternalNoteChanged;
         Easy2Do.App.StorageService.NoteLockTakeoverRequested += OnLockTakeoverRequested;
+        _lockMonitorTimer.Tick += OnLockMonitorTick;
     }
 
     // Automatic refresh on external note file change
@@ -41,13 +46,12 @@ public partial class NoteWindow : Window
         });
     }
 
-    private void OnWindowOpened(object? sender, EventArgs e)
+    private async void OnWindowOpened(object? sender, EventArgs e)
     {
         if (DataContext is NoteViewModel vm)
         {
             var note = vm.Note;
             _noteId = note.Id;
-            Easy2Do.App.StorageService.StartOwnedLockHeartbeat(note.Id);
             // Register this window
             if (!OpenWindows.TryGetValue(note.Id, out var list))
                 OpenWindows[note.Id] = list = new List<NoteWindow>();
@@ -63,6 +67,9 @@ public partial class NoteWindow : Window
                 WindowStartupLocation = WindowStartupLocation.Manual;
                 Position = new PixelPoint((int)note.WindowX, (int)note.WindowY);
             }
+
+            await InitializeLockStateAsync(vm);
+            _lockMonitorTimer.Start();
         }
     }
 
@@ -82,13 +89,19 @@ public partial class NoteWindow : Window
             note.WindowWidth = Width;
             note.WindowHeight = Height;
             note.ModifiedDate = DateTime.Now;
-            _ = Easy2Do.App.StorageService.StopOwnedLockHeartbeatAsync(note.Id);
+            if (_holdsLock)
+            {
+                _ = Easy2Do.App.StorageService.StopOwnedLockHeartbeatAsync(note.Id);
+                _holdsLock = false;
+            }
         }
 
     }
 
     private void OnWindowClosed(object? sender, EventArgs e)
     {
+        _lockMonitorTimer.Stop();
+        _lockMonitorTimer.Tick -= OnLockMonitorTick;
         Easy2Do.App.StorageService.NoteFileChanged -= OnExternalNoteChanged;
         Easy2Do.App.StorageService.NoteLockTakeoverRequested -= OnLockTakeoverRequested;
     }
@@ -97,29 +110,166 @@ public partial class NoteWindow : Window
     {
         if (!_noteId.HasValue || _noteId.Value != id) return;
 
+        if (DataContext is NoteViewModel vm && _holdsLock)
+        {
+            await YieldLockAsync(vm, requestedBy);
+        }
+    }
+
+    private async void OnLockMonitorTick(object? sender, EventArgs e)
+    {
         if (DataContext is NoteViewModel vm)
         {
-            if (Easy2Do.App.MainWindow?.DataContext is MainViewModel mainVm)
+            await RefreshLockStateAsync(vm, allowAcquireIfFree: true);
+        }
+    }
+
+    private async Task InitializeLockStateAsync(NoteViewModel vm)
+    {
+        var acquire = await Easy2Do.App.StorageService.TryAcquireNoteLockAsync(vm.Note.Id, requestTakeover: false);
+        if (acquire.Acquired)
+        {
+            _holdsLock = true;
+            Easy2Do.App.StorageService.StartOwnedLockHeartbeat(vm.Note.Id);
+            vm.SetLockState(false, null);
+        }
+        else
+        {
+            _holdsLock = false;
+            vm.SetLockState(true, acquire.OwnerDeviceName);
+        }
+    }
+
+    private async Task RefreshLockStateAsync(NoteViewModel vm, bool allowAcquireIfFree)
+    {
+        if (_lockRefreshInProgress) return;
+        _lockRefreshInProgress = true;
+        try
+        {
+            var info = await Easy2Do.App.StorageService.GetNoteLockInfoAsync(vm.Note.Id);
+
+            if (info == null)
             {
-                try
+                if (allowAcquireIfFree)
                 {
-                    await mainVm.FlushNoteAsync(vm.Note.Id);
+                    var acquire = await Easy2Do.App.StorageService.TryAcquireNoteLockAsync(vm.Note.Id, requestTakeover: false);
+                    if (acquire.Acquired)
+                    {
+                        if (!_holdsLock)
+                        {
+                            Easy2Do.App.StorageService.StartOwnedLockHeartbeat(vm.Note.Id);
+                        }
+                        _holdsLock = true;
+                        vm.SetLockState(false, null);
+                    }
+                    else
+                    {
+                        if (_holdsLock)
+                        {
+                            _holdsLock = false;
+                            await Easy2Do.App.StorageService.StopOwnedLockHeartbeatAsync(vm.Note.Id);
+                        }
+                        vm.SetLockState(true, acquire.OwnerDeviceName);
+                    }
                 }
-                catch
-                {
-                    // best-effort before closing
-                }
+                return;
             }
 
-            await Easy2Do.App.StorageService.StopOwnedLockHeartbeatAsync(vm.Note.Id);
-
-            Dispatcher.UIThread.Post(() =>
+            var ownedByThisDevice = Easy2Do.App.StorageService.IsOwnedByThisDevice(info);
+            if (ownedByThisDevice)
             {
-                if (IsVisible)
+                if (!_holdsLock)
                 {
-                    Close();
+                    Easy2Do.App.StorageService.StartOwnedLockHeartbeat(vm.Note.Id);
+                    _holdsLock = true;
                 }
-            });
+
+                if (!string.IsNullOrWhiteSpace(info.TakeoverRequestedByDeviceId) &&
+                    !string.Equals(info.TakeoverRequestedByDeviceId, info.DeviceId, StringComparison.Ordinal))
+                {
+                    await YieldLockAsync(vm, info.TakeoverRequestedByDeviceName ?? "another device");
+                    return;
+                }
+
+                vm.SetLockState(false, null);
+                return;
+            }
+
+            if (_holdsLock)
+            {
+                _holdsLock = false;
+                await Easy2Do.App.StorageService.StopOwnedLockHeartbeatAsync(vm.Note.Id);
+            }
+            vm.SetLockState(true, info.DeviceName);
+        }
+        finally
+        {
+            _lockRefreshInProgress = false;
+        }
+    }
+
+    private async Task YieldLockAsync(NoteViewModel vm, string requestedBy)
+    {
+        if (Easy2Do.App.MainWindow?.DataContext is MainViewModel mainVm)
+        {
+            try
+            {
+                await mainVm.FlushNoteAsync(vm.Note.Id);
+            }
+            catch
+            {
+                // best-effort flush
+            }
+        }
+
+        if (_holdsLock)
+        {
+            _holdsLock = false;
+            await Easy2Do.App.StorageService.StopOwnedLockHeartbeatAsync(vm.Note.Id);
+        }
+
+        vm.SetLockState(true, requestedBy);
+        vm.LockMessage = $"Locked by {requestedBy}. Use Take Over to edit here.";
+        await vm.RefreshNoteCommand.ExecuteAsync(null);
+    }
+
+    private async void OnTakeOverClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not NoteViewModel vm) return;
+
+        vm.LockMessage = "Requesting takeover...";
+        await Easy2Do.App.StorageService.TryAcquireNoteLockAsync(vm.Note.Id, requestTakeover: true);
+
+        var acquired = await Easy2Do.App.StorageService.WaitForLockAsync(
+            vm.Note.Id,
+            timeout: TimeSpan.FromSeconds(25),
+            pollDelay: TimeSpan.FromSeconds(2));
+
+        if (acquired)
+        {
+            if (!_holdsLock)
+            {
+                Easy2Do.App.StorageService.StartOwnedLockHeartbeat(vm.Note.Id);
+            }
+            _holdsLock = true;
+            vm.SetLockState(false, null);
+            await vm.RefreshNoteCommand.ExecuteAsync(null);
+        }
+        else
+        {
+            await RefreshLockStateAsync(vm, allowAcquireIfFree: true);
+            if (vm.IsLocked)
+            {
+                vm.LockMessage = "Still locked by another device. Try again shortly.";
+            }
+        }
+    }
+
+    private async void OnRefreshLockClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is NoteViewModel vm)
+        {
+            await RefreshLockStateAsync(vm, allowAcquireIfFree: true);
         }
     }
 

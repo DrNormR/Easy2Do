@@ -549,6 +549,27 @@ public class StorageService : IDisposable
         return new NoteLockAcquireResult(false, true, existing.DeviceId, existing.DeviceName);
     }
 
+    public async Task<NoteLockInfo?> GetNoteLockInfoAsync(Guid noteId)
+    {
+        EnsureNotesDirectory();
+        var path = NoteLockPath(noteId);
+        if (!File.Exists(path))
+            return null;
+        var info = await ReadLockAsync(path);
+        if (info == null)
+            return null;
+        if (IsStale(info, DateTime.UtcNow))
+            return null;
+        return info;
+    }
+
+    public bool IsOwnedByThisDevice(NoteLockInfo? info)
+    {
+        return info != null && string.Equals(info.DeviceId, _deviceId, StringComparison.Ordinal);
+    }
+
+    public string ThisDeviceName => _deviceName;
+
     public async Task<bool> WaitForLockAsync(Guid noteId, TimeSpan timeout, TimeSpan pollDelay)
     {
         var started = DateTime.UtcNow;

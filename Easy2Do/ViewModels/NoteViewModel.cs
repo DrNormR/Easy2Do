@@ -19,6 +19,15 @@ public partial class NoteViewModel : ViewModelBase
     [ObservableProperty]
     private bool _newItemIsHeading;
 
+    [ObservableProperty]
+    private bool _isLocked = true;
+
+    [ObservableProperty]
+    private string _lockOwnerName = string.Empty;
+
+    [ObservableProperty]
+    private string _lockMessage = "Checking lock state...";
+
     public ObservableCollection<string> AvailableColors { get; } = new()
     {
         "#FFFFE680", // Yellow
@@ -33,6 +42,24 @@ public partial class NoteViewModel : ViewModelBase
     public NoteViewModel(Note note)
     {
         _note = note;
+    }
+
+    public bool IsEditable => !IsLocked;
+
+    partial void OnIsLockedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsEditable));
+    }
+
+    public void SetLockState(bool locked, string? ownerName)
+    {
+        IsLocked = locked;
+        LockOwnerName = ownerName ?? string.Empty;
+        LockMessage = locked
+            ? string.IsNullOrWhiteSpace(ownerName)
+                ? "This note is locked on another device."
+                : $"Locked by {ownerName}"
+            : "Unlocked";
     }
 
     [RelayCommand]
