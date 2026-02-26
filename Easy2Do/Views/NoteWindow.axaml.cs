@@ -120,7 +120,9 @@ public partial class NoteWindow : Window
     {
         if (DataContext is NoteViewModel vm)
         {
-            await RefreshLockStateAsync(vm, allowAcquireIfFree: true);
+            // Prevent lock flapping during cloud-sync delay:
+            // only a current owner auto-reacquires if lock file briefly disappears.
+            await RefreshLockStateAsync(vm, allowAcquireIfFree: _holdsLock);
         }
     }
 
@@ -171,6 +173,10 @@ public partial class NoteWindow : Window
                         }
                         vm.SetLockState(true, acquire.OwnerDeviceName);
                     }
+                }
+                else if (!_holdsLock && vm.IsLocked)
+                {
+                    vm.LockMessage = "Lock state updating... if needed, click Take Over.";
                 }
                 return;
             }
@@ -277,6 +283,7 @@ public partial class NoteWindow : Window
     {
         if (DataContext is NoteViewModel vm)
         {
+            vm.LockMessage = "Refreshing lock state...";
             await RefreshLockStateAsync(vm, allowAcquireIfFree: true);
         }
     }
