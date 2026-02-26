@@ -23,8 +23,10 @@ public partial class NoteWindow : Window
         InitializeComponent();
         Opened += OnWindowOpened;
         Closing += OnWindowClosing;
+        Closed += OnWindowClosed;
         // Subscribe to external note file changes
         Easy2Do.App.StorageService.NoteFileChanged += OnExternalNoteChanged;
+        Easy2Do.App.StorageService.NoteLockTakeoverRequested += OnLockTakeoverRequested;
     }
 
     // Automatic refresh on external note file change
@@ -45,6 +47,7 @@ public partial class NoteWindow : Window
         {
             var note = vm.Note;
             _noteId = note.Id;
+            Easy2Do.App.StorageService.StartOwnedLockHeartbeat(note.Id);
             // Register this window
             if (!OpenWindows.TryGetValue(note.Id, out var list))
                 OpenWindows[note.Id] = list = new List<NoteWindow>();
@@ -79,8 +82,45 @@ public partial class NoteWindow : Window
             note.WindowWidth = Width;
             note.WindowHeight = Height;
             note.ModifiedDate = DateTime.Now;
+            _ = Easy2Do.App.StorageService.StopOwnedLockHeartbeatAsync(note.Id);
         }
 
+    }
+
+    private void OnWindowClosed(object? sender, EventArgs e)
+    {
+        Easy2Do.App.StorageService.NoteFileChanged -= OnExternalNoteChanged;
+        Easy2Do.App.StorageService.NoteLockTakeoverRequested -= OnLockTakeoverRequested;
+    }
+
+    private async void OnLockTakeoverRequested(Guid id, string requestedBy)
+    {
+        if (!_noteId.HasValue || _noteId.Value != id) return;
+
+        if (DataContext is NoteViewModel vm)
+        {
+            if (Easy2Do.App.MainWindow?.DataContext is MainViewModel mainVm)
+            {
+                try
+                {
+                    await mainVm.FlushNoteAsync(vm.Note.Id);
+                }
+                catch
+                {
+                    // best-effort before closing
+                }
+            }
+
+            await Easy2Do.App.StorageService.StopOwnedLockHeartbeatAsync(vm.Note.Id);
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (IsVisible)
+                {
+                    Close();
+                }
+            });
+        }
     }
 
     private void OnTextBoxKeyDown(object? sender, KeyEventArgs e)

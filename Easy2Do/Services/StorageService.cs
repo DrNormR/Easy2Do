@@ -31,6 +31,16 @@ public class StorageService : IDisposable
     private readonly object _lock = new();
     private const int PollIntervalMs = 3000;
 
+    // Advisory locking for cross-device editing
+    private readonly object _noteLockSync = new();
+    private readonly Dictionary<Guid, int> _ownedLockRefCounts = new();
+    private Timer? _lockHeartbeatTimer;
+    private const int LockHeartbeatMs = 4000;
+    private const int LockStaleSeconds = 20;
+    private const string LockExtension = ".lock.json";
+    private readonly string _deviceId;
+    private readonly string _deviceName;
+
     /// <summary>
     /// Fired on the thread-pool when an external change is detected for a specific note file.
     /// The Guid is the note Id parsed from the filename.
@@ -47,6 +57,11 @@ public class StorageService : IDisposable
     /// </summary>
     public event Action<Guid>? NoteFileCreated;
 
+    /// <summary>
+    /// Fired when another device requests takeover for a note lock this device currently owns.
+    /// </summary>
+    public event Action<Guid, string>? NoteLockTakeoverRequested;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -57,6 +72,9 @@ public class StorageService : IDisposable
     {
         _settingsService = settingsService;
         _backupService = new BackupService(settingsService);
+        _deviceId = settingsService.GetDeviceId();
+        _deviceName = settingsService.GetDeviceName();
+        _lockHeartbeatTimer = new Timer(_ => LockHeartbeatTick(), null, LockHeartbeatMs, LockHeartbeatMs);
     }
 
     private string GetNotesDirectory()
@@ -74,6 +92,8 @@ public class StorageService : IDisposable
     private static string NoteFileName(Guid id) => $"{id}.json";
 
     private string NoteFilePath(Guid id) => Path.Combine(GetNotesDirectory(), NoteFileName(id));
+
+    private string NoteLockPath(Guid id) => Path.Combine(GetNotesDirectory(), $"{id}{LockExtension}");
 
     // ──────────────────────────── Migration ────────────────────────────
 
@@ -213,6 +233,19 @@ public class StorageService : IDisposable
         {
             EnsureNotesDirectory();
             var path = NoteFilePath(note.Id);
+            var json = JsonSerializer.Serialize(note, JsonOptions);
+
+            if (File.Exists(path))
+            {
+                var existingJson = await File.ReadAllTextAsync(path);
+                if (string.Equals(existingJson, json, StringComparison.Ordinal))
+                {
+                    note.LastWriteTimeUtc = File.GetLastWriteTimeUtc(path);
+                    UpdateKnownState(note.Id, path);
+                    return;
+                }
+            }
+
             DateTime? fileLastWrite = null;
             if (File.Exists(path))
             {
@@ -223,12 +256,11 @@ public class StorageService : IDisposable
                 note.LastWriteTimeUtc == null ||
                 Math.Abs((fileLastWrite.Value - note.LastWriteTimeUtc.Value).TotalSeconds) < 2)
             {
-                note.ModifiedDate = DateTime.UtcNow;
                 _isSelfWriting = true;
-                var json = JsonSerializer.Serialize(note, JsonOptions);
                 await File.WriteAllTextAsync(path, json);
                 await _backupService.BackupNoteAsync(note.Id, json);
                 note.LastWriteTimeUtc = File.GetLastWriteTimeUtc(path);
+                UpdateKnownState(note.Id, path);
             }
             else
             {
@@ -255,6 +287,10 @@ public class StorageService : IDisposable
             if (File.Exists(path))
                 File.Delete(path);
             _backupService.DeleteBackupsForNote(id);
+            lock (_lock)
+            {
+                _knownFileStates.Remove(id);
+            }
         }
         catch (Exception ex)
         {
@@ -476,10 +512,236 @@ public class StorageService : IDisposable
         return Guid.TryParse(name, out id);
     }
 
+    public async Task<NoteLockAcquireResult> TryAcquireNoteLockAsync(Guid noteId, bool requestTakeover)
+    {
+        EnsureNotesDirectory();
+        var path = NoteLockPath(noteId);
+        var now = DateTime.UtcNow;
+        NoteLockInfo? existing = null;
+
+        if (File.Exists(path))
+        {
+            existing = await ReadLockAsync(path);
+        }
+
+        if (existing == null || IsStale(existing, now) || existing.DeviceId == _deviceId)
+        {
+            var mine = new NoteLockInfo
+            {
+                NoteId = noteId,
+                DeviceId = _deviceId,
+                DeviceName = _deviceName,
+                LastHeartbeatUtc = now
+            };
+            await WriteLockAsync(path, mine);
+            return new NoteLockAcquireResult(true, false, null, null);
+        }
+
+        if (!requestTakeover)
+        {
+            return new NoteLockAcquireResult(false, false, existing.DeviceId, existing.DeviceName);
+        }
+
+        existing.TakeoverRequestedByDeviceId = _deviceId;
+        existing.TakeoverRequestedByDeviceName = _deviceName;
+        existing.TakeoverRequestedUtc = now;
+        await WriteLockAsync(path, existing);
+        return new NoteLockAcquireResult(false, true, existing.DeviceId, existing.DeviceName);
+    }
+
+    public async Task<bool> WaitForLockAsync(Guid noteId, TimeSpan timeout, TimeSpan pollDelay)
+    {
+        var started = DateTime.UtcNow;
+        while (DateTime.UtcNow - started < timeout)
+        {
+            var result = await TryAcquireNoteLockAsync(noteId, requestTakeover: false);
+            if (result.Acquired)
+                return true;
+
+            await Task.Delay(pollDelay);
+        }
+
+        return false;
+    }
+
+    public void StartOwnedLockHeartbeat(Guid noteId)
+    {
+        lock (_noteLockSync)
+        {
+            if (_ownedLockRefCounts.TryGetValue(noteId, out var count))
+                _ownedLockRefCounts[noteId] = count + 1;
+            else
+                _ownedLockRefCounts[noteId] = 1;
+        }
+    }
+
+    public async Task StopOwnedLockHeartbeatAsync(Guid noteId)
+    {
+        var shouldRelease = false;
+        lock (_noteLockSync)
+        {
+            if (_ownedLockRefCounts.TryGetValue(noteId, out var count))
+            {
+                count--;
+                if (count <= 0)
+                {
+                    _ownedLockRefCounts.Remove(noteId);
+                    shouldRelease = true;
+                }
+                else
+                {
+                    _ownedLockRefCounts[noteId] = count;
+                }
+            }
+        }
+
+        if (shouldRelease)
+        {
+            await ReleaseNoteLockIfOwnedAsync(noteId);
+        }
+    }
+
+    public async Task ReleaseNoteLockIfOwnedAsync(Guid noteId)
+    {
+        var path = NoteLockPath(noteId);
+        if (!File.Exists(path)) return;
+        var lockInfo = await ReadLockAsync(path);
+        if (lockInfo?.DeviceId == _deviceId)
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch
+            {
+                // best-effort
+            }
+        }
+    }
+
+    private async void LockHeartbeatTick()
+    {
+        try
+        {
+            Guid[] noteIds;
+            lock (_noteLockSync)
+            {
+                noteIds = _ownedLockRefCounts.Keys.ToArray();
+            }
+
+            foreach (var noteId in noteIds)
+            {
+                var path = NoteLockPath(noteId);
+                if (!File.Exists(path))
+                {
+                    var mine = new NoteLockInfo
+                    {
+                        NoteId = noteId,
+                        DeviceId = _deviceId,
+                        DeviceName = _deviceName,
+                        LastHeartbeatUtc = DateTime.UtcNow
+                    };
+                    await WriteLockAsync(path, mine);
+                    continue;
+                }
+
+                var lockInfo = await ReadLockAsync(path);
+                if (lockInfo == null)
+                {
+                    continue;
+                }
+
+                if (lockInfo.DeviceId != _deviceId)
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(lockInfo.TakeoverRequestedByDeviceId) &&
+                    !string.Equals(lockInfo.TakeoverRequestedByDeviceId, _deviceId, StringComparison.Ordinal))
+                {
+                    NoteLockTakeoverRequested?.Invoke(noteId, lockInfo.TakeoverRequestedByDeviceName ?? "another device");
+                }
+
+                lockInfo.LastHeartbeatUtc = DateTime.UtcNow;
+                await WriteLockAsync(path, lockInfo);
+            }
+        }
+        catch
+        {
+            // heartbeat is best-effort
+        }
+    }
+
+    private static bool IsStale(NoteLockInfo lockInfo, DateTime nowUtc)
+    {
+        return (nowUtc - lockInfo.LastHeartbeatUtc).TotalSeconds > LockStaleSeconds;
+    }
+
+    private async Task<NoteLockInfo?> ReadLockAsync(string path)
+    {
+        try
+        {
+            var json = await File.ReadAllTextAsync(path);
+            return JsonSerializer.Deserialize<NoteLockInfo>(json, JsonOptions);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task WriteLockAsync(string path, NoteLockInfo lockInfo)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(lockInfo, JsonOptions);
+            await File.WriteAllTextAsync(path, json);
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
+    private void UpdateKnownState(Guid id, string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            lock (_lock)
+            {
+                _knownFileStates[id] = new FileState(info.LastWriteTimeUtc, info.Length);
+            }
+        }
+        catch
+        {
+            // best-effort cache update
+        }
+    }
+
     private readonly record struct FileState(DateTime LastWriteTimeUtc, long Length);
 
     public void Dispose()
     {
         StopWatching();
+        _lockHeartbeatTimer?.Dispose();
+        _lockHeartbeatTimer = null;
     }
+}
+
+public record NoteLockAcquireResult(
+    bool Acquired,
+    bool TakeoverRequested,
+    string? OwnerDeviceId,
+    string? OwnerDeviceName);
+
+public class NoteLockInfo
+{
+    public Guid NoteId { get; set; }
+    public string DeviceId { get; set; } = string.Empty;
+    public string DeviceName { get; set; } = string.Empty;
+    public DateTime LastHeartbeatUtc { get; set; }
+    public string? TakeoverRequestedByDeviceId { get; set; }
+    public string? TakeoverRequestedByDeviceName { get; set; }
+    public DateTime? TakeoverRequestedUtc { get; set; }
 }

@@ -30,7 +30,7 @@ public partial class MainViewModel : ViewModelBase
 
     private bool _isLoading;
     private readonly Dictionary<Guid, CancellationTokenSource> _saveCtsMap = new();
-    private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(1200);
 
     public MainViewModel()
     {
@@ -55,6 +55,10 @@ public partial class MainViewModel : ViewModelBase
         _isLoading = true;
         try
         {
+            foreach (var existing in Notes)
+            {
+                UnsubscribeNote(existing);
+            }
             await App.StorageService.MigrateIfNeededAsync();
             var loadedNotes = await App.StorageService.LoadAllNotesAsync();
             System.Diagnostics.Debug.WriteLine($"LoadNotesAsync: loaded {loadedNotes.Count} notes.");
@@ -339,17 +343,35 @@ public partial class MainViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void OpenNote(Note? note)
+    private async Task OpenNote(Note? note)
     {
-        if (note != null)
+        if (note == null) return;
+
+        var lockResult = await App.StorageService.TryAcquireNoteLockAsync(note.Id, requestTakeover: false);
+        if (!lockResult.Acquired)
         {
-            var noteViewModel = new NoteViewModel(note);
-            var noteWindow = new NoteWindow
+            var requestTakeover = await ShowLockDialogAsync(lockResult.OwnerDeviceName);
+            if (!requestTakeover) return;
+
+            await App.StorageService.TryAcquireNoteLockAsync(note.Id, requestTakeover: true);
+            var acquired = await App.StorageService.WaitForLockAsync(
+                note.Id,
+                timeout: TimeSpan.FromSeconds(20),
+                pollDelay: TimeSpan.FromSeconds(2));
+
+            if (!acquired)
             {
-                DataContext = noteViewModel
-            };
-            noteWindow.Show();
+                await ShowInfoDialogAsync("Note Busy", "Takeover request sent, but the other device has not released the note yet.");
+                return;
+            }
         }
+
+        var noteViewModel = new NoteViewModel(note);
+        var noteWindow = new NoteWindow
+        {
+            DataContext = noteViewModel
+        };
+        noteWindow.Show();
     }
 
     [RelayCommand]
@@ -404,6 +426,113 @@ public partial class MainViewModel : ViewModelBase
                 okButton.Click += (_, __) => dlg.Close();
                 await dlg.ShowDialog(window);
             }
+        });
+    }
+
+    public async Task FlushNoteAsync(Guid noteId)
+    {
+        var note = Notes.FirstOrDefault(n => n.Id == noteId);
+        if (note == null) return;
+        CancelPendingSave(noteId);
+        await App.StorageService.SaveNoteAsync(note);
+        await SaveManifestAsync();
+    }
+
+    private async Task<bool> ShowLockDialogAsync(string? ownerDeviceName)
+    {
+        return await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var owner = string.IsNullOrWhiteSpace(ownerDeviceName) ? "another device" : ownerDeviceName;
+            var dialog = new Avalonia.Controls.Window
+            {
+                Title = "Note In Use",
+                Width = 420,
+                Height = 180
+            };
+
+            var takeOver = new Avalonia.Controls.Button
+            {
+                Content = "Take Over",
+                MinWidth = 90,
+                Margin = new Avalonia.Thickness(0, 0, 8, 0)
+            };
+            var cancel = new Avalonia.Controls.Button
+            {
+                Content = "Cancel",
+                MinWidth = 90
+            };
+
+            bool result = false;
+            takeOver.Click += (_, __) => { result = true; dialog.Close(); };
+            cancel.Click += (_, __) => dialog.Close();
+
+            dialog.Content = new Avalonia.Controls.StackPanel
+            {
+                Margin = new Avalonia.Thickness(20),
+                Spacing = 12,
+                Children =
+                {
+                    new Avalonia.Controls.TextBlock
+                    {
+                        Text = $"This note is currently open on {owner}. Request takeover?",
+                        TextWrapping = Avalonia.Media.TextWrapping.Wrap
+                    },
+                    new Avalonia.Controls.StackPanel
+                    {
+                        Orientation = Avalonia.Layout.Orientation.Horizontal,
+                        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+                        Children = { takeOver, cancel }
+                    }
+                }
+            };
+
+            if (App.MainWindow != null)
+                await dialog.ShowDialog(App.MainWindow);
+            else
+                await dialog.ShowDialog((Avalonia.Controls.Window?)null);
+            return result;
+        });
+    }
+
+    private async Task ShowInfoDialogAsync(string title, string message)
+    {
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var ok = new Avalonia.Controls.Button
+            {
+                Content = "OK",
+                MinWidth = 90
+            };
+            var dialog = new Avalonia.Controls.Window
+            {
+                Title = title,
+                Width = 380,
+                Height = 150,
+                Content = new Avalonia.Controls.StackPanel
+                {
+                    Margin = new Avalonia.Thickness(20),
+                    Spacing = 12,
+                    Children =
+                    {
+                        new Avalonia.Controls.TextBlock
+                        {
+                            Text = message,
+                            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+                        },
+                        new Avalonia.Controls.StackPanel
+                        {
+                            Orientation = Avalonia.Layout.Orientation.Horizontal,
+                            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+                            Children = { ok }
+                        }
+                    }
+                }
+            };
+            ok.Click += (_, __) => dialog.Close();
+            if (App.MainWindow != null)
+                await dialog.ShowDialog(App.MainWindow);
+            else
+                await dialog.ShowDialog((Avalonia.Controls.Window?)null);
         });
     }
 }

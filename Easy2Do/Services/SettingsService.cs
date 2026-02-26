@@ -65,7 +65,8 @@ public class SettingsService
         var documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         return new AppSettings
         {
-            StorageLocation = Path.Combine(documentsPath, "Easy2Do")
+            StorageLocation = Path.Combine(documentsPath, "Easy2Do"),
+            DeviceId = Guid.NewGuid().ToString("N")
         };
     }
 
@@ -82,9 +83,25 @@ public class SettingsService
             SaveSettings();
         }
     }
+
+    public string GetDeviceId()
+    {
+        if (string.IsNullOrWhiteSpace(_settings.DeviceId))
+        {
+            _settings.DeviceId = Guid.NewGuid().ToString("N");
+            SaveSettings();
+        }
+        return _settings.DeviceId;
+    }
+
+    public string GetDeviceName()
+    {
+        return Environment.MachineName;
+    }
 }
 
 public class AppSettings
 {
     public string StorageLocation { get; set; } = string.Empty;
+    public string DeviceId { get; set; } = string.Empty;
 }
