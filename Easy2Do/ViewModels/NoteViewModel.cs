@@ -72,23 +72,37 @@ public partial class NoteViewModel : ViewModelBase
     [RelayCommand]
     private async Task RefreshNote()
     {
+        if (Easy2Do.App.MainWindow?.DataContext is MainViewModel mainVm)
+        {
+            mainVm.CancelPendingSave(Note.Id);
+        }
+
         // Reload note from disk
         var reloaded = await Easy2Do.App.StorageService.LoadNoteAsync(Note.Id);
         if (reloaded != null)
         {
-            // Update all properties
-            Note.Title = reloaded.Title;
+            Note.IsReloading = true;
+            try
+            {
+                // Update all properties
+                Note.Title = reloaded.Title;
             Note.Color = reloaded.Color;
             Note.CreatedDate = reloaded.CreatedDate;
             Note.ModifiedDate = reloaded.ModifiedDate;
+            Note.LastWriteTimeUtc = reloaded.LastWriteTimeUtc;
             Note.IsPinned = reloaded.IsPinned;
-            Note.WindowX = reloaded.WindowX;
-            Note.WindowY = reloaded.WindowY;
-            Note.WindowWidth = reloaded.WindowWidth;
-            Note.WindowHeight = reloaded.WindowHeight;
-            Note.Items.Clear();
-            foreach (var item in reloaded.Items)
-                Note.Items.Add(item);
+                Note.WindowX = reloaded.WindowX;
+                Note.WindowY = reloaded.WindowY;
+                Note.WindowWidth = reloaded.WindowWidth;
+                Note.WindowHeight = reloaded.WindowHeight;
+                Note.Items.Clear();
+                foreach (var item in reloaded.Items)
+                    Note.Items.Add(item);
+            }
+            finally
+            {
+                Note.IsReloading = false;
+            }
         }
     }
 }

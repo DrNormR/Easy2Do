@@ -27,7 +27,7 @@ public class StorageService : IDisposable
 
     // Polling fallback to catch changes missed by FileSystemWatcher (e.g., cloud sync behavior)
     private Timer? _pollTimer;
-    private readonly Dictionary<Guid, DateTime> _knownFileWriteTimes = new();
+    private readonly Dictionary<Guid, FileState> _knownFileStates = new();
     private readonly object _lock = new();
     private const int PollIntervalMs = 3000;
 
@@ -186,7 +186,10 @@ public class StorageService : IDisposable
                 if (note == null)
                     System.Diagnostics.Debug.WriteLine($"LoadNoteAsync: failed to deserialize note {id}");
                 else
+                {
+                    note.LastWriteTimeUtc = File.GetLastWriteTimeUtc(path);
                     System.Diagnostics.Debug.WriteLine($"LoadNoteAsync: deserialized note {id} - {note.Title}");
+                }
                 return note;
             }
             catch (Exception ex)
@@ -216,13 +219,16 @@ public class StorageService : IDisposable
                 fileLastWrite = File.GetLastWriteTimeUtc(path);
             }
             // Only allow save if file is unchanged or does not exist
-            if (fileLastWrite == null || Math.Abs((fileLastWrite.Value - note.ModifiedDate.ToUniversalTime()).TotalSeconds) < 2)
+            if (fileLastWrite == null ||
+                note.LastWriteTimeUtc == null ||
+                Math.Abs((fileLastWrite.Value - note.LastWriteTimeUtc.Value).TotalSeconds) < 2)
             {
                 note.ModifiedDate = DateTime.UtcNow;
                 _isSelfWriting = true;
                 var json = JsonSerializer.Serialize(note, JsonOptions);
                 await File.WriteAllTextAsync(path, json);
                 await _backupService.BackupNoteAsync(note.Id, json);
+                note.LastWriteTimeUtc = File.GetLastWriteTimeUtc(path);
             }
             else
             {
@@ -330,7 +336,7 @@ public class StorageService : IDisposable
         // Initialize known file timestamps for polling
         lock (_lock)
         {
-            _knownFileWriteTimes.Clear();
+            _knownFileStates.Clear();
             foreach (var file in Directory.GetFiles(notesDir, "*.json"))
             {
                 var name = Path.GetFileNameWithoutExtension(file);
@@ -338,8 +344,8 @@ public class StorageService : IDisposable
                 {
                     try
                     {
-                        var ts = File.GetLastWriteTimeUtc(file);
-                        _knownFileWriteTimes[id] = ts;
+                        var info = new FileInfo(file);
+                        _knownFileStates[id] = new FileState(info.LastWriteTimeUtc, info.Length);
                     }
                     catch { }
                 }
@@ -417,34 +423,39 @@ public class StorageService : IDisposable
                     var name = Path.GetFileNameWithoutExtension(file);
                     if (!Guid.TryParse(name, out var id)) continue;
                     currentSet.Add(id);
-                    DateTime lastWrite;
-                    try { lastWrite = File.GetLastWriteTimeUtc(file); }
+                    FileState state;
+                    try
+                    {
+                        var info = new FileInfo(file);
+                        state = new FileState(info.LastWriteTimeUtc, info.Length);
+                    }
                     catch { continue; }
 
-                    if (_knownFileWriteTimes.TryGetValue(id, out var known))
+                    if (_knownFileStates.TryGetValue(id, out var known))
                     {
-                        if (lastWrite > known && !_isSelfWriting)
+                        if (state.LastWriteTimeUtc != known.LastWriteTimeUtc || state.Length != known.Length)
                         {
-                            _knownFileWriteTimes[id] = lastWrite;
-                            NoteFileChanged?.Invoke(id);
+                            _knownFileStates[id] = state;
+                            if (!_isSelfWriting)
+                                NoteFileChanged?.Invoke(id);
                         }
                     }
                     else
                     {
                         // New file
-                        _knownFileWriteTimes[id] = lastWrite;
+                        _knownFileStates[id] = state;
                         if (!_isSelfWriting)
                             NoteFileCreated?.Invoke(id);
                     }
                 }
 
                 // Check for deleted files
-                var knownIds = _knownFileWriteTimes.Keys.ToList();
+                var knownIds = _knownFileStates.Keys.ToList();
                 foreach (var knownId in knownIds)
                 {
                     if (!currentSet.Contains(knownId))
                     {
-                        _knownFileWriteTimes.Remove(knownId);
+                        _knownFileStates.Remove(knownId);
                         if (!_isSelfWriting)
                             NoteFileDeleted?.Invoke(knownId);
                     }
@@ -464,6 +475,8 @@ public class StorageService : IDisposable
         var name = Path.GetFileNameWithoutExtension(fileName);
         return Guid.TryParse(name, out id);
     }
+
+    private readonly record struct FileState(DateTime LastWriteTimeUtc, long Length);
 
     public void Dispose()
     {

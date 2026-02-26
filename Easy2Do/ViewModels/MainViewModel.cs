@@ -97,6 +97,7 @@ public partial class MainViewModel : ViewModelBase
         if (e.PropertyName is nameof(Note.ModifiedDate)) return;
         if (sender is Note note)
         {
+            if (note.IsReloading) return;
             note.ModifiedDate = DateTime.Now;
             RequestSaveNote(note);
         }
@@ -108,6 +109,7 @@ public partial class MainViewModel : ViewModelBase
 
         var note = Notes.FirstOrDefault(n => n.Items == items);
         if (note is null) return;
+        if (note.IsReloading) return;
 
         if (e.NewItems != null)
             foreach (TodoItem item in e.NewItems)
@@ -126,6 +128,7 @@ public partial class MainViewModel : ViewModelBase
         if (sender is not TodoItem item) return;
         var note = Notes.FirstOrDefault(n => n.Items.Contains(item));
         if (note is null) return;
+        if (note.IsReloading) return;
 
         note.ModifiedDate = DateTime.Now;
         RequestSaveNote(note);
@@ -201,6 +204,7 @@ public partial class MainViewModel : ViewModelBase
 
     private async Task ReloadNoteFromDiskAsync(Guid id)
     {
+        CancelPendingSave(id);
         var freshNote = await App.StorageService.LoadNoteAsync(id);
         if (freshNote is null) return;
 
@@ -223,6 +227,7 @@ public partial class MainViewModel : ViewModelBase
             old.Color = freshNote.Color;
             old.CreatedDate = freshNote.CreatedDate;
             old.ModifiedDate = freshNote.ModifiedDate;
+            old.LastWriteTimeUtc = freshNote.LastWriteTimeUtc;
             old.WindowX = freshNote.WindowX;
             old.WindowY = freshNote.WindowY;
             old.WindowWidth = freshNote.WindowWidth;
@@ -240,6 +245,15 @@ public partial class MainViewModel : ViewModelBase
         finally
         {
             _isLoading = false;
+        }
+    }
+
+    public void CancelPendingSave(Guid noteId)
+    {
+        if (_saveCtsMap.TryGetValue(noteId, out var cts))
+        {
+            cts.Cancel();
+            _saveCtsMap.Remove(noteId);
         }
     }
 

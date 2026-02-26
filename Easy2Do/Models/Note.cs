@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Easy2Do.Models;
@@ -24,6 +25,9 @@ public partial class Note : ObservableObject
     [ObservableProperty]
     private DateTime _modifiedDate = DateTime.Now;
 
+    [JsonIgnore]
+    public DateTime? LastWriteTimeUtc { get; set; }
+
     [ObservableProperty]
     private double _windowX = double.NaN;
 
@@ -38,4 +42,13 @@ public partial class Note : ObservableObject
 
     [ObservableProperty]
     private bool _isPinned;
+
+    private bool _isReloading;
+
+    [JsonIgnore]
+    public bool IsReloading
+    {
+        get => _isReloading;
+        set => SetProperty(ref _isReloading, value);
+    }
 }
