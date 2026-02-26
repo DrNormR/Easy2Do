@@ -285,6 +285,7 @@ public partial class NoteWindow : Window
         {
             vm.LockMessage = "Refreshing lock state...";
             await RefreshLockStateAsync(vm, allowAcquireIfFree: true);
+            await vm.RefreshNoteCommand.ExecuteAsync(null);
         }
     }
 
