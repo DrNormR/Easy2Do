@@ -242,8 +242,16 @@ public partial class NoteWindow : Window
 
         var acquired = await Easy2Do.App.StorageService.WaitForLockAsync(
             vm.Note.Id,
-            timeout: TimeSpan.FromSeconds(25),
+            timeout: TimeSpan.FromSeconds(14),
             pollDelay: TimeSpan.FromSeconds(2));
+
+        if (!acquired)
+        {
+            vm.LockMessage = "No release yet. Forcing takeover...";
+            acquired = await Easy2Do.App.StorageService.ForceTakeoverAsync(
+                vm.Note.Id,
+                minRequestAge: TimeSpan.FromSeconds(8));
+        }
 
         if (acquired)
         {

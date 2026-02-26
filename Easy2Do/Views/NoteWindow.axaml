@@ -316,7 +316,7 @@
               <!-- Item Text with conditional styling -->
               <Grid Grid.Column="3">
                 <!-- Heading text -->
-                <TextBox Text="{Binding Text}"
+                <TextBox Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                          Classes="inline-editor"
                          FontSize="16"
                          TextWrapping="Wrap"
@@ -332,7 +332,7 @@
                          KeyDown="OnItemTextBoxKeyDown"/>
 
                 <!-- Show non-strikethrough text when not completed (non-heading) -->
-                <TextBox Text="{Binding Text}"
+                <TextBox Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                          Classes="inline-editor"
                          FontSize="12"
                          TextWrapping="Wrap"
@@ -359,7 +359,7 @@
                 
                 <!-- Show strikethrough text when completed (non-heading) -->
                 <Grid>
-                  <TextBox Text="{Binding Text}"
+                  <TextBox Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                            Classes="inline-editor"
                            FontSize="12"
                            TextWrapping="Wrap"

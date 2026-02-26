@@ -35,6 +35,7 @@ public class StorageService : IDisposable
     private readonly object _noteLockSync = new();
     private readonly Dictionary<Guid, int> _ownedLockRefCounts = new();
     private Timer? _lockHeartbeatTimer;
+    private int _lockHeartbeatRunning;
     private const int LockHeartbeatMs = 4000;
     private const int LockStaleSeconds = 20;
     private const string LockExtension = ".lock.json";
@@ -585,6 +586,46 @@ public class StorageService : IDisposable
         return false;
     }
 
+    public async Task<bool> ForceTakeoverAsync(Guid noteId, TimeSpan minRequestAge)
+    {
+        EnsureNotesDirectory();
+        var path = NoteLockPath(noteId);
+        var now = DateTime.UtcNow;
+        var existing = File.Exists(path) ? await ReadLockAsync(path) : null;
+
+        if (existing == null || IsStale(existing, now) || existing.DeviceId == _deviceId)
+        {
+            var mine = new NoteLockInfo
+            {
+                NoteId = noteId,
+                DeviceId = _deviceId,
+                DeviceName = _deviceName,
+                LastHeartbeatUtc = now
+            };
+            await WriteLockAsync(path, mine);
+            return true;
+        }
+
+        var requestedByMe = string.Equals(existing.TakeoverRequestedByDeviceId, _deviceId, StringComparison.Ordinal);
+        var requestAgeOk = existing.TakeoverRequestedUtc.HasValue &&
+                           (now - existing.TakeoverRequestedUtc.Value) >= minRequestAge;
+
+        if (requestedByMe && requestAgeOk)
+        {
+            var mine = new NoteLockInfo
+            {
+                NoteId = noteId,
+                DeviceId = _deviceId,
+                DeviceName = _deviceName,
+                LastHeartbeatUtc = now
+            };
+            await WriteLockAsync(path, mine);
+            return true;
+        }
+
+        return false;
+    }
+
     public void StartOwnedLockHeartbeat(Guid noteId)
     {
         lock (_noteLockSync)
@@ -642,6 +683,9 @@ public class StorageService : IDisposable
 
     private async void LockHeartbeatTick()
     {
+        if (Interlocked.Exchange(ref _lockHeartbeatRunning, 1) == 1)
+            return;
+
         try
         {
             Guid[] noteIds;
@@ -652,9 +696,14 @@ public class StorageService : IDisposable
 
             foreach (var noteId in noteIds)
             {
+                if (!IsStillOwned(noteId))
+                    continue;
+
                 var path = NoteLockPath(noteId);
                 if (!File.Exists(path))
                 {
+                    if (!IsStillOwned(noteId))
+                        continue;
                     var mine = new NoteLockInfo
                     {
                         NoteId = noteId,
@@ -671,6 +720,9 @@ public class StorageService : IDisposable
                 {
                     continue;
                 }
+
+                if (!IsStillOwned(noteId))
+                    continue;
 
                 if (lockInfo.DeviceId != _deviceId)
                 {
@@ -690,6 +742,10 @@ public class StorageService : IDisposable
         catch
         {
             // heartbeat is best-effort
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _lockHeartbeatRunning, 0);
         }
     }
 
@@ -721,6 +777,14 @@ public class StorageService : IDisposable
         catch
         {
             // best-effort
+        }
+    }
+
+    private bool IsStillOwned(Guid noteId)
+    {
+        lock (_noteLockSync)
+        {
+            return _ownedLockRefCounts.ContainsKey(noteId);
         }
     }
 
