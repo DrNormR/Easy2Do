@@ -106,7 +106,24 @@ public partial class NoteWindow : Window
         Easy2Do.App.StorageService.NoteLockTakeoverRequested -= OnLockTakeoverRequested;
     }
 
-    private async void OnLockTakeoverRequested(Guid id, string requestedBy)
+    private void OnLockTakeoverRequested(Guid id, string requestedBy)
+    {
+        // This event is raised from background timers; always hop to UI thread
+        // before touching DataContext/visual state.
+        Dispatcher.UIThread.Post(async () =>
+        {
+            try
+            {
+                await HandleLockTakeoverRequestedAsync(id, requestedBy);
+            }
+            catch
+            {
+                // best-effort takeover handling
+            }
+        });
+    }
+
+    private async Task HandleLockTakeoverRequestedAsync(Guid id, string requestedBy)
     {
         if (!_noteId.HasValue || _noteId.Value != id) return;
 
