@@ -88,9 +88,9 @@ public partial class NoteWindow : Window
             note.WindowY = Position.Y;
             note.WindowWidth = Width;
             note.WindowHeight = Height;
-            note.ModifiedDate = DateTime.Now;
             if (_holdsLock)
             {
+                note.ModifiedDate = DateTime.Now;
                 _ = Easy2Do.App.StorageService.StopOwnedLockHeartbeatAsync(note.Id);
                 _holdsLock = false;
             }
@@ -284,7 +284,11 @@ public partial class NoteWindow : Window
         if (DataContext is NoteViewModel vm)
         {
             vm.LockMessage = "Refreshing lock state...";
-            await RefreshLockStateAsync(vm, allowAcquireIfFree: true);
+            await RefreshLockStateAsync(vm, allowAcquireIfFree: _holdsLock);
+            if (vm.IsLocked)
+            {
+                vm.LockMessage = "Lock refreshed. Use Take Over to claim edit lock.";
+            }
             await vm.RefreshNoteCommand.ExecuteAsync(null);
         }
     }

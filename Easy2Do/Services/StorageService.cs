@@ -234,6 +234,15 @@ public class StorageService : IDisposable
         {
             EnsureNotesDirectory();
             var path = NoteFilePath(note.Id);
+
+            // Never allow this device to write a note currently owned by another active lock holder.
+            var activeLock = await GetNoteLockInfoAsync(note.Id);
+            if (activeLock != null && !string.Equals(activeLock.DeviceId, _deviceId, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"This note is locked by {activeLock.DeviceName}. Refresh and take over before editing.");
+            }
+
             var json = JsonSerializer.Serialize(note, JsonOptions);
 
             if (File.Exists(path))
