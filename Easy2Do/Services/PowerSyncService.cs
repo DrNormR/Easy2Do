@@ -51,12 +51,15 @@ public sealed class PowerSyncService
             lock (_stateLock)
             {
                 if (_started)
+                {
+                    _ = RefreshFromSupabaseAsync();
                     return Task.FromResult(PowerSyncStartResult.Success("Sync already running; refreshing."));
+                }
 
                 _started = true;
             }
 
-            _ = SyncFromSupabaseAsync();
+            _ = RefreshFromSupabaseAsync();
             return Task.FromResult(PowerSyncStartResult.Success($"Sync bootstrap ready for '{powerSyncUrl}' using '{dbPath}'."));
         }
         catch (Exception ex)
@@ -65,7 +68,7 @@ public sealed class PowerSyncService
         }
     }
 
-    private async Task SyncFromSupabaseAsync()
+    private async Task RefreshFromSupabaseAsync()
     {
         var supabaseUrl = _settingsService.GetSupabaseUrl();
         var supabaseKey = _settingsService.GetSupabaseApiKey();
@@ -77,6 +80,7 @@ public sealed class PowerSyncService
             var notes = await GetSupabaseAsync<List<NoteDto>>(supabaseUrl, supabaseKey, "notes?select=*");
             var items = await GetSupabaseAsync<List<ItemDto>>(supabaseUrl, supabaseKey, "note_items?select=*");
             var order = await GetSupabaseAsync<List<OrderDto>>(supabaseUrl, supabaseKey, "note_order?select=note_id,sort_order&order=sort_order.asc");
+            Console.WriteLine($"[Sync] Pulled {notes.Count} notes, {items.Count} items, {order.Count} order rows.");
 
             var notesById = new Dictionary<Guid, Note>();
             foreach (var noteDto in notes)
@@ -126,12 +130,12 @@ public sealed class PowerSyncService
                 orderedIds.Add(o.NoteId);
             }
 
-            await _storageService.ReplaceAllNotesAsync(new List<Note>(notesById.Values), orderedIds);
+            await _storageService.MergeRemoteNotesAsync(new List<Note>(notesById.Values), orderedIds);
             DataRefreshed?.Invoke();
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[Sync] Supabase refresh failed: {ex.Message}");
+            Console.WriteLine($"[Sync] Supabase refresh failed: {ex.Message}");
         }
     }
 

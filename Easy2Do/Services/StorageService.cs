@@ -870,6 +870,38 @@ INSERT INTO note_items (
         transaction.Commit();
     }
 
+    public async Task MergeRemoteNotesAsync(IReadOnlyList<Note> remoteNotes, IReadOnlyList<Guid> remoteOrderIds)
+    {
+        EnsureDatabaseInitialized();
+
+        var localNotes = await LoadAllNotesAsync();
+        var localById = localNotes.ToDictionary(n => n.Id, n => n);
+
+        var missing = new List<Note>();
+        foreach (var remote in remoteNotes)
+        {
+            if (!localById.ContainsKey(remote.Id))
+                missing.Add(remote);
+        }
+
+        if (missing.Count == 0)
+            return;
+
+        foreach (var note in missing)
+        {
+            await SaveNoteAsync(note);
+        }
+
+        var localOrder = localNotes.Select(n => n.Id).ToList();
+        foreach (var id in remoteOrderIds)
+        {
+            if (!localOrder.Contains(id))
+                localOrder.Add(id);
+        }
+
+        await SaveManifestAsync(localOrder);
+    }
+
     private bool IsSupabaseDevSyncEnabled()
     {
         if (!_settingsService.GetSyncEnabled()) return false;
