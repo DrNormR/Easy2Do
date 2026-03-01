@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
 using Easy2Do.Models;
 
@@ -19,6 +20,10 @@ public sealed class PowerSyncService
     private readonly StorageService _storageService;
     private readonly object _stateLock = new();
     private bool _started;
+    private CancellationTokenSource? _refreshCts;
+    private Task? _refreshLoopTask;
+    private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(30);
     private static readonly HttpClient HttpClient = new();
 
     public event Action? DataRefreshed;
@@ -58,6 +63,8 @@ public sealed class PowerSyncService
                 }
 
                 _started = true;
+                _refreshCts = new CancellationTokenSource();
+                _refreshLoopTask = Task.Run(() => RefreshLoopAsync(_refreshCts.Token));
             }
 
             _ = RefreshFromSupabaseAsync();
@@ -66,6 +73,27 @@ public sealed class PowerSyncService
         catch (Exception ex)
         {
             return Task.FromResult(PowerSyncStartResult.Failed($"Sync start failed: {ex.Message}"));
+        }
+    }
+
+    private async Task RefreshLoopAsync(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(RefreshInterval, token);
+                if (token.IsCancellationRequested) break;
+                await RefreshFromSupabaseAsync();
+            }
+            catch (TaskCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Sync] Refresh loop error: {ex.Message}");
+            }
         }
     }
 
@@ -78,6 +106,9 @@ public sealed class PowerSyncService
 
         try
         {
+            if (!await _refreshGate.WaitAsync(0))
+                return;
+
             var notes = await GetSupabaseAsync<List<NoteDto>>(supabaseUrl, supabaseKey, "notes?select=*");
             var items = await GetSupabaseAsync<List<ItemDto>>(supabaseUrl, supabaseKey, "note_items?select=*&order=position.asc");
             var order = await GetSupabaseAsync<List<OrderDto>>(supabaseUrl, supabaseKey, "note_order?select=note_id,sort_order&order=sort_order.asc");
@@ -150,6 +181,11 @@ public sealed class PowerSyncService
         catch (Exception ex)
         {
             Console.WriteLine($"[Sync] Supabase refresh failed: {ex.Message}");
+        }
+        finally
+        {
+            if (_refreshGate.CurrentCount == 0)
+                _refreshGate.Release();
         }
     }
 

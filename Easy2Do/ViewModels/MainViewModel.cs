@@ -55,36 +55,102 @@ public partial class MainViewModel : ViewModelBase
         _isLoading = true;
         try
         {
-            foreach (var existing in Notes)
-            {
-                UnsubscribeNote(existing);
-            }
             await App.StorageService.MigrateIfNeededAsync();
             var loadedNotes = await App.StorageService.LoadAllNotesAsync();
             System.Diagnostics.Debug.WriteLine($"LoadNotesAsync: loaded {loadedNotes.Count} notes.");
-            Notes.Clear();
-            foreach (var note in loadedNotes)
-            {
-                System.Diagnostics.Debug.WriteLine($"Loaded note: {note.Id} - {note.Title}");
-                SubscribeNote(note);
-                Notes.Add(note);
-                if (note.NeedsItemMigration)
-                {
-                    try
-                    {
-                        await App.StorageService.SaveNoteAsync(note);
-                        note.NeedsItemMigration = false;
-                    }
-                    catch (InvalidOperationException)
-                    {
-                        // Best-effort migration; skip if note is locked or changed externally.
-                    }
-                }
-            }
+            ApplyLoadedNotes(loadedNotes);
         }
         finally
         {
             _isLoading = false;
+        }
+    }
+
+    private void ApplyLoadedNotes(IReadOnlyList<Note> loadedNotes)
+    {
+        var existingById = Notes.ToDictionary(n => n.Id, n => n);
+        var loadedIds = new HashSet<Guid>();
+
+        foreach (var note in loadedNotes)
+        {
+            loadedIds.Add(note.Id);
+            System.Diagnostics.Debug.WriteLine($"Loaded note: {note.Id} - {note.Title}");
+
+            if (existingById.TryGetValue(note.Id, out var existing))
+            {
+                UpdateExistingNote(existing, note);
+                continue;
+            }
+
+            SubscribeNote(note);
+            Notes.Add(note);
+        }
+
+        var toRemove = Notes.Where(n => !loadedIds.Contains(n.Id)).ToList();
+        foreach (var note in toRemove)
+        {
+            UnsubscribeNote(note);
+            Notes.Remove(note);
+            if (SelectedNote?.Id == note.Id)
+                SelectedNote = null;
+        }
+    }
+
+    private void UpdateExistingNote(Note target, Note incoming)
+    {
+        target.IsReloading = true;
+        try
+        {
+            target.Title = incoming.Title;
+            target.Color = incoming.Color;
+            target.CreatedDate = incoming.CreatedDate;
+            target.ModifiedDate = incoming.ModifiedDate;
+            target.WindowX = incoming.WindowX;
+            target.WindowY = incoming.WindowY;
+            target.WindowWidth = incoming.WindowWidth;
+            target.WindowHeight = incoming.WindowHeight;
+            target.IsPinned = incoming.IsPinned;
+
+            ApplyItems(target, incoming);
+        }
+        finally
+        {
+            target.IsReloading = false;
+        }
+    }
+
+    private void ApplyItems(Note target, Note incoming)
+    {
+        var existingById = target.Items.ToDictionary(i => i.Id, i => i);
+        var desired = new List<TodoItem>();
+
+        foreach (var incomingItem in incoming.Items)
+        {
+            if (existingById.TryGetValue(incomingItem.Id, out var existing))
+            {
+                existing.Text = incomingItem.Text;
+                existing.IsCompleted = incomingItem.IsCompleted;
+                existing.IsHeading = incomingItem.IsHeading;
+                existing.IsImportant = incomingItem.IsImportant;
+                existing.TextAttachment = incomingItem.TextAttachment;
+                existing.DueDate = incomingItem.DueDate;
+                existing.IsAlarmDismissed = incomingItem.IsAlarmDismissed;
+                existing.SnoozeUntil = incomingItem.SnoozeUntil;
+                existing.CreatedAtUtc = incomingItem.CreatedAtUtc;
+                existing.UpdatedAtUtc = incomingItem.UpdatedAtUtc;
+                existing.DeletedAtUtc = incomingItem.DeletedAtUtc;
+                desired.Add(existing);
+            }
+            else
+            {
+                desired.Add(incomingItem);
+            }
+        }
+
+        target.Items.Clear();
+        foreach (var item in desired)
+        {
+            target.Items.Add(item);
         }
     }
 
