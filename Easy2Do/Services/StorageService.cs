@@ -772,6 +772,104 @@ ON CONFLICT(id) DO NOTHING;";
     {
     }
 
+    public async Task ReplaceAllNotesAsync(IReadOnlyList<Note> notes, IReadOnlyList<Guid> orderedIds)
+    {
+        EnsureDatabaseInitialized();
+
+        using var connection = OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        using (var clearItems = connection.CreateCommand())
+        {
+            clearItems.Transaction = transaction;
+            clearItems.CommandText = "DELETE FROM note_items;";
+            await clearItems.ExecuteNonQueryAsync();
+        }
+
+        using (var clearNotes = connection.CreateCommand())
+        {
+            clearNotes.Transaction = transaction;
+            clearNotes.CommandText = "DELETE FROM notes;";
+            await clearNotes.ExecuteNonQueryAsync();
+        }
+
+        using (var clearOrder = connection.CreateCommand())
+        {
+            clearOrder.Transaction = transaction;
+            clearOrder.CommandText = "DELETE FROM note_order;";
+            await clearOrder.ExecuteNonQueryAsync();
+        }
+
+        foreach (var note in notes)
+        {
+            NormalizeItems(note);
+            NormalizeWindowBounds(note);
+
+            using (var insertNote = connection.CreateCommand())
+            {
+                insertNote.Transaction = transaction;
+                insertNote.CommandText = @"
+INSERT INTO notes (id, title, color, created_date, modified_date, window_x, window_y, window_width, window_height, is_pinned)
+VALUES ($id, $title, $color, $created_date, $modified_date, $window_x, $window_y, $window_width, $window_height, $is_pinned);";
+                insertNote.Parameters.AddWithValue("$id", note.Id.ToString());
+                insertNote.Parameters.AddWithValue("$title", note.Title ?? string.Empty);
+                insertNote.Parameters.AddWithValue("$color", note.Color ?? "#FFFFE680");
+                insertNote.Parameters.AddWithValue("$created_date", ToDb(note.CreatedDate));
+                insertNote.Parameters.AddWithValue("$modified_date", ToDb(note.ModifiedDate));
+                insertNote.Parameters.AddWithValue("$window_x", note.WindowX);
+                insertNote.Parameters.AddWithValue("$window_y", note.WindowY);
+                insertNote.Parameters.AddWithValue("$window_width", note.WindowWidth);
+                insertNote.Parameters.AddWithValue("$window_height", note.WindowHeight);
+                insertNote.Parameters.AddWithValue("$is_pinned", note.IsPinned ? 1 : 0);
+                await insertNote.ExecuteNonQueryAsync();
+            }
+
+            for (var i = 0; i < note.Items.Count; i++)
+            {
+                var item = note.Items[i];
+                using var insertItem = connection.CreateCommand();
+                insertItem.Transaction = transaction;
+                insertItem.CommandText = @"
+INSERT INTO note_items (
+    id, note_id, text, is_completed, is_heading, is_important, text_attachment,
+    due_date, is_alarm_dismissed, snooze_until, created_at_utc, updated_at_utc, deleted_at_utc, position
+) VALUES (
+    $id, $note_id, $text, $is_completed, $is_heading, $is_important, $text_attachment,
+    $due_date, $is_alarm_dismissed, $snooze_until, $created_at_utc, $updated_at_utc, $deleted_at_utc, $position
+);";
+                insertItem.Parameters.AddWithValue("$id", item.Id.ToString());
+                insertItem.Parameters.AddWithValue("$note_id", note.Id.ToString());
+                insertItem.Parameters.AddWithValue("$text", item.Text ?? string.Empty);
+                insertItem.Parameters.AddWithValue("$is_completed", item.IsCompleted ? 1 : 0);
+                insertItem.Parameters.AddWithValue("$is_heading", item.IsHeading ? 1 : 0);
+                insertItem.Parameters.AddWithValue("$is_important", item.IsImportant ? 1 : 0);
+                insertItem.Parameters.AddWithValue("$text_attachment", item.TextAttachment ?? string.Empty);
+                insertItem.Parameters.AddWithValue("$due_date", (object?)ToDb(item.DueDate) ?? DBNull.Value);
+                insertItem.Parameters.AddWithValue("$is_alarm_dismissed", item.IsAlarmDismissed ? 1 : 0);
+                insertItem.Parameters.AddWithValue("$snooze_until", (object?)ToDb(item.SnoozeUntil) ?? DBNull.Value);
+                insertItem.Parameters.AddWithValue("$created_at_utc", ToDb(item.CreatedAtUtc));
+                insertItem.Parameters.AddWithValue("$updated_at_utc", ToDb(item.UpdatedAtUtc));
+                insertItem.Parameters.AddWithValue("$deleted_at_utc", (object?)ToDb(item.DeletedAtUtc) ?? DBNull.Value);
+                insertItem.Parameters.AddWithValue("$position", i);
+                await insertItem.ExecuteNonQueryAsync();
+            }
+        }
+
+        var orderSource = orderedIds.Count > 0 ? orderedIds : notes.Select(n => n.Id).ToList();
+        for (var i = 0; i < orderSource.Count; i++)
+        {
+            using var insert = connection.CreateCommand();
+            insert.Transaction = transaction;
+            insert.CommandText = "INSERT INTO note_order (id, note_id, sort_order) VALUES ($id, $note_id, $sort_order);";
+            insert.Parameters.AddWithValue("$id", orderSource[i].ToString());
+            insert.Parameters.AddWithValue("$note_id", orderSource[i].ToString());
+            insert.Parameters.AddWithValue("$sort_order", i);
+            await insert.ExecuteNonQueryAsync();
+        }
+
+        transaction.Commit();
+    }
+
     private bool IsSupabaseDevSyncEnabled()
     {
         if (!_settingsService.GetSyncEnabled()) return false;

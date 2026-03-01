@@ -7,6 +7,7 @@ using Avalonia.Markup.Xaml;
 using Easy2Do.ViewModels;
 using Easy2Do.Views;
 using Easy2Do.Services;
+using Avalonia.Threading;
 
 namespace Easy2Do;
 
@@ -46,6 +47,10 @@ public partial class App : Application
             var viewModel = (MainViewModel)MainWindow.DataContext!;
             AlarmService.Start(() => viewModel.Notes);
             _ = PowerSyncService.StartAsync();
+            PowerSyncService.DataRefreshed += () =>
+            {
+                Dispatcher.UIThread.Post(async () => await viewModel.LoadNotesAsync());
+            };
 
             // Handle application exit to save notes
             desktop.Exit += OnExit;
