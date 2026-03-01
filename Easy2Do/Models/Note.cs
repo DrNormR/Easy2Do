@@ -28,6 +28,9 @@ public partial class Note : ObservableObject
     [JsonIgnore]
     public DateTime? LastWriteTimeUtc { get; set; }
 
+    [JsonIgnore]
+    public bool NeedsItemMigration { get; set; }
+
     [ObservableProperty]
     private double _windowX = double.NaN;
 

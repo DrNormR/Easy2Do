@@ -6,6 +6,18 @@ namespace Easy2Do.Models;
 public partial class TodoItem : ObservableObject
 {
     [ObservableProperty]
+    private Guid _id = Guid.NewGuid();
+
+    [ObservableProperty]
+    private DateTime _createdAtUtc = DateTime.UtcNow;
+
+    [ObservableProperty]
+    private DateTime _updatedAtUtc = DateTime.UtcNow;
+
+    [ObservableProperty]
+    private DateTime? _deletedAtUtc;
+
+    [ObservableProperty]
     private string _text = string.Empty;
 
     [ObservableProperty]
@@ -19,7 +31,11 @@ public partial class TodoItem : ObservableObject
     public bool IsImportant
     {
         get => _isImportant;
-        set => SetProperty(ref _isImportant, value);
+        set
+        {
+            if (SetProperty(ref _isImportant, value))
+                Touch();
+        }
     }
 
     private string _textAttachment = string.Empty;
@@ -31,6 +47,7 @@ public partial class TodoItem : ObservableObject
         {
             if (SetProperty(ref _textAttachment, value))
             {
+                Touch();
                 OnPropertyChanged(nameof(HasTextAttachment));
             }
         }
@@ -47,6 +64,7 @@ public partial class TodoItem : ObservableObject
         {
             if (SetProperty(ref _dueDate, value))
             {
+                Touch();
                 OnPropertyChanged(nameof(HasDueDate));
             }
         }
@@ -59,7 +77,11 @@ public partial class TodoItem : ObservableObject
     public bool IsAlarmDismissed
     {
         get => _isAlarmDismissed;
-        set => SetProperty(ref _isAlarmDismissed, value);
+        set
+        {
+            if (SetProperty(ref _isAlarmDismissed, value))
+                Touch();
+        }
     }
 
     private DateTime? _snoozeUntil;
@@ -67,6 +89,21 @@ public partial class TodoItem : ObservableObject
     public DateTime? SnoozeUntil
     {
         get => _snoozeUntil;
-        set => SetProperty(ref _snoozeUntil, value);
+        set
+        {
+            if (SetProperty(ref _snoozeUntil, value))
+                Touch();
+        }
+    }
+
+    partial void OnTextChanged(string value) => Touch();
+
+    partial void OnIsCompletedChanged(bool value) => Touch();
+
+    partial void OnIsHeadingChanged(bool value) => Touch();
+
+    private void Touch()
+    {
+        UpdatedAtUtc = DateTime.UtcNow;
     }
 }

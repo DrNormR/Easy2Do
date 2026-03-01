@@ -12,7 +12,9 @@
         WindowStartupLocation="CenterOwner"
         CanResize="False">
 
-  <Grid Margin="20">
+  <ScrollViewer Margin="20"
+                VerticalScrollBarVisibility="Auto"
+                HorizontalScrollBarVisibility="Disabled">
     <StackPanel Spacing="15">
       <TextBlock Text="Settings" 
                  FontSize="24" 
@@ -78,6 +80,68 @@
         </StackPanel>
       </Border>
 
+      <Border BorderBrush="#FFCCCCCC"
+              BorderThickness="1"
+              CornerRadius="5"
+              Padding="15"
+              Background="#FFF9F9F9">
+        <StackPanel Spacing="10">
+          <TextBlock Text="Sync (PowerSync)"
+                     FontSize="16"
+                     FontWeight="SemiBold"/>
+
+          <CheckBox Content="Enable sync"
+                    IsChecked="{Binding SyncEnabled}"/>
+
+          <TextBlock Text="PowerSync URL"
+                     FontSize="12"
+                     Foreground="#FF666666"/>
+          <TextBox Text="{Binding PowerSyncUrl}"
+                   Watermark="https://your-powersync-url"
+                   FontSize="12"/>
+
+          <TextBlock Text="PowerSync dev token (development only)"
+                     FontSize="12"
+                     Foreground="#FF666666"/>
+          <TextBox Text="{Binding PowerSyncDevToken}"
+                   Watermark="dev token"
+                   FontSize="12"
+                   PasswordChar="*"/>
+
+          <TextBlock Text="Backend URL (for upload + prod auth)"
+                     FontSize="12"
+                     Foreground="#FF666666"/>
+          <TextBox Text="{Binding SyncBackendUrl}"
+                   Watermark="https://your-backend"
+                   FontSize="12"/>
+
+          <TextBlock Text="Supabase URL (direct upload, dev only)"
+                     FontSize="12"
+                     Foreground="#FF666666"/>
+          <TextBox Text="{Binding SupabaseUrl}"
+                   Watermark="https://your-project.supabase.co"
+                   FontSize="12"/>
+
+          <TextBlock Text="Supabase API key (anon or service role)"
+                     FontSize="12"
+                     Foreground="#FF666666"/>
+          <TextBox Text="{Binding SupabaseApiKey}"
+                   Watermark="supabase key"
+                   FontSize="12"
+                   PasswordChar="*"/>
+
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Button Content="Reconnect"
+                    Command="{Binding ReconnectSyncCommand}"
+                    Padding="15,8"
+                    Background="#FF607D8B"
+                    Foreground="White"
+                    CornerRadius="5"/>
+          </StackPanel>
+
+        </StackPanel>
+      </Border>
+
       <Border BorderBrush="#FFCCCCCC" 
               BorderThickness="1" 
               CornerRadius="5"
@@ -108,5 +172,5 @@
         <views:AboutView />
       </Border>
     </StackPanel>
-  </Grid>
+  </ScrollViewer>
 </Window>

@@ -68,6 +68,18 @@ public partial class MainViewModel : ViewModelBase
                 System.Diagnostics.Debug.WriteLine($"Loaded note: {note.Id} - {note.Title}");
                 SubscribeNote(note);
                 Notes.Add(note);
+                if (note.NeedsItemMigration)
+                {
+                    try
+                    {
+                        await App.StorageService.SaveNoteAsync(note);
+                        note.NeedsItemMigration = false;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Best-effort migration; skip if note is locked or changed externally.
+                    }
+                }
             }
         }
         finally
@@ -130,6 +142,8 @@ public partial class MainViewModel : ViewModelBase
     private void OnItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (sender is not TodoItem item) return;
+        if (e.PropertyName is nameof(TodoItem.UpdatedAtUtc) or nameof(TodoItem.CreatedAtUtc) or nameof(TodoItem.DeletedAtUtc) or nameof(TodoItem.Id))
+            return;
         var note = Notes.FirstOrDefault(n => n.Items.Contains(item));
         if (note is null) return;
         if (note.IsReloading) return;
@@ -158,9 +172,11 @@ public partial class MainViewModel : ViewModelBase
     {
         try
         {
+            System.Diagnostics.Debug.WriteLine($"[Save] Debounce start {note.Id} '{note.Title}'");
             await Task.Delay(DebounceDelay, token);
             await App.StorageService.SaveNoteAsync(note);
             await SaveManifestAsync();
+            System.Diagnostics.Debug.WriteLine($"[Save] Debounce done {note.Id} '{note.Title}'");
         }
         catch (TaskCanceledException) { }
         catch (InvalidOperationException ex)

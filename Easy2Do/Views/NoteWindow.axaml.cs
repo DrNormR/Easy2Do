@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -104,6 +105,12 @@ public partial class NoteWindow : Window
         _lockMonitorTimer.Tick -= OnLockMonitorTick;
         Easy2Do.App.StorageService.NoteFileChanged -= OnExternalNoteChanged;
         Easy2Do.App.StorageService.NoteLockTakeoverRequested -= OnLockTakeoverRequested;
+
+        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            if (desktop.Windows.Count == 0)
+                desktop.Shutdown();
+        }
     }
 
     private void OnLockTakeoverRequested(Guid id, string requestedBy)

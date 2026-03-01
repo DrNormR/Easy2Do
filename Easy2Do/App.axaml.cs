@@ -15,8 +15,8 @@ public partial class App : Application
     public static MainWindow? MainWindow { get; private set; }
     public static SettingsService SettingsService { get; private set; } = null!;
     public static StorageService StorageService { get; private set; } = null!;
+    public static PowerSyncService PowerSyncService { get; private set; } = null!;
     public static AlarmService AlarmService { get; private set; } = null!;
-    public static BackupService BackupService { get; private set; } = null!;
 
     public override void Initialize()
     {
@@ -24,8 +24,8 @@ public partial class App : Application
         // Initialize services
         SettingsService = new SettingsService();
         StorageService = new StorageService(SettingsService);
+        PowerSyncService = new PowerSyncService(SettingsService, StorageService);
         AlarmService = new AlarmService();
-        BackupService = new BackupService(SettingsService);
     }
 
     public override void OnFrameworkInitializationCompleted()
@@ -40,10 +40,12 @@ public partial class App : Application
                 DataContext = new MainViewModel()
             };
             desktop.MainWindow = MainWindow;
+            desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnLastWindowClose;
 
             // Start alarm service to monitor due dates
             var viewModel = (MainViewModel)MainWindow.DataContext!;
             AlarmService.Start(() => viewModel.Notes);
+            _ = PowerSyncService.StartAsync();
 
             // Handle application exit to save notes
             desktop.Exit += OnExit;
@@ -59,7 +61,7 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    private async void OnExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
+    private void OnExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
     {
         AlarmService.Stop();
         StorageService.StopWatching();
@@ -67,12 +69,15 @@ public partial class App : Application
         // Save all notes when application closes
         if (MainWindow?.DataContext is MainViewModel viewModel)
         {
+            System.Console.WriteLine($"[App] Exit: saving {viewModel.Notes.Count} notes");
+            foreach (var note in viewModel.Notes)
+                System.Console.WriteLine($"[App] Exit note {note.Id} '{note.Title}'");
             foreach (var note in viewModel.Notes)
             {
-                await StorageService.SaveNoteAsync(note);
+                StorageService.SaveNoteAsync(note).GetAwaiter().GetResult();
             }
             var ids = viewModel.Notes.Select(n => n.Id).ToList();
-            await StorageService.SaveManifestAsync(ids);
+            StorageService.SaveManifestAsync(ids).GetAwaiter().GetResult();
         }
     }
 

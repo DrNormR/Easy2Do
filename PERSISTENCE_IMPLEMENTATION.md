@@ -1,7 +1,8 @@
-# Persistent Storage Implementation
+# Persistent Storage Implementation (SQLite + PowerSync)
 
 ## Overview
-Added automatic JSON-based persistence for notes with configurable storage location.
+Added automatic SQLite-based persistence for notes with configurable storage location.
+Stage 3 adds PowerSync scaffolding to sync the same SQLite file with Supabase/Postgres.
 
 ## New Components
 
@@ -9,13 +10,14 @@ Added automatic JSON-based persistence for notes with configurable storage locat
 Created `Easy2Do/Services/` folder with two services:
 
 #### **StorageService.cs**
-- Handles saving/loading notes in JSON format
-- Uses `System.Text.Json` for serialization
-- Default file: `notes.json` in configured storage location
+- Handles saving/loading notes in SQLite
+- Default file: `easy2do.db` in configured storage location
+- Legacy JSON import supported for one-time migration
 - Features:
-  - Async file I/O operations
+  - Async database operations
   - Error handling with console logging
   - Auto-creates directories if they don't exist
+  - Migration to add `note_order.id` for sync compatibility
 
 #### **SettingsService.cs**
 - Manages application settings persistence
@@ -25,6 +27,17 @@ Created `Easy2Do/Services/` folder with two services:
   - Get/Set storage location
   - Persistent settings across sessions
   - Auto-creates app data folder
+  - PowerSync settings for sync configuration
+
+#### **PowerSyncService.cs**
+- Initializes PowerSync against the same `easy2do.db` SQLite file
+- Connects to PowerSync using a backend connector
+- Uses a schema that mirrors the local tables
+
+#### **PowerSyncConnector.cs**
+- Fetches PowerSync credentials (dev token or backend-provided token)
+- Uploads CRUD batches to a backend endpoint
+- Dev shortcut: can upload directly to Supabase REST using an API key (no backend)
 
 ### 2. Updated ViewModels
 
@@ -44,6 +57,7 @@ Added new functionality:
 - **BrowseStorageLocationCommand**: Opens folder picker dialog
 - **OpenStorageFolderCommand**: Opens storage folder in file explorer
 - Uses Avalonia's `IStorageProvider` for cross-platform folder selection
+- PowerSync config fields and toggle for sync enablement
 
 ### 3. Updated UI
 
@@ -54,6 +68,10 @@ Added new functionality:
   - "Browse..." button to change location
   - "Open Folder" button to view files
   - Warning about location changes not moving existing files
+- Added "Sync (PowerSync)" section with:
+  - Toggle to enable sync
+  - Fields for PowerSync URL, dev token, backend URL
+  - Reconnect button
 
 ### 4. Application Lifecycle
 
@@ -67,15 +85,21 @@ Added new functionality:
 
 ### On Application Start:
 1. `SettingsService` loads settings (or creates defaults)
-2. `StorageService` is initialized with settings
-3. `MainViewModel` loads existing notes from JSON
-4. If no notes exist, creates a sample note
+2. `StorageService` initializes the SQLite database
+3. `MainViewModel` loads existing notes from SQLite
+4. If database is empty, StorageService attempts to import legacy JSON notes
 
 ### During Use:
 1. User makes changes to notes (add/edit/delete)
 2. Changes trigger property/collection change events
-3. `SaveNotesAsync()` is called automatically
-4. Notes are serialized to JSON and saved
+3. `SaveNoteAsync()` is called automatically
+4. Notes and items are persisted to SQLite
+
+### Sync Behavior (Stage 3):
+1. If sync is enabled and PowerSync is configured, PowerSync connects on app start
+2. Local SQLite changes are queued for upload via PowerSync triggers
+3. PowerSync pulls remote changes into the same SQLite file
+4. The app continues to read/write via SQLite as before
 
 ### On Application Close:
 1. Exit event handler is triggered
@@ -91,39 +115,31 @@ Added new functionality:
 
 ## File Locations
 
-- **Notes**: `{StorageLocation}/notes.json`
+- **SQLite DB**: `{StorageLocation}/easy2do.db`
 - **Settings**: `%LocalAppData%/Easy2Do/settings.json`
 - **Default Storage**: `Documents/Easy2Do/`
 
 ## Data Format
 
-### notes.json Example:
-```json
-[
-  {
-    "Id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "Title": "My Note",
-    "Color": "#FFFFE680",
-    "Items": [
-      {
-        "Text": "Task 1",
-        "IsCompleted": false
-      },
-      {
-        "Text": "Task 2",
-        "IsCompleted": true
-      }
-    ],
-    "CreatedDate": "2025-01-15T10:30:00",
-    "ModifiedDate": "2025-01-15T14:25:00"
-  }
-]
-```
+### SQLite Schema (high-level):
+- `notes`: note metadata
+- `note_items`: list items per note
+- `note_order`: note ordering
+
+### PowerSync Schema (mirrors SQLite):
+- `notes`, `note_items`, `note_order`
+- Each table includes a primary key column `id` (required by PowerSync)
 
 ### settings.json Example:
 ```json
 {
-  "StorageLocation": "C:\\Users\\YourName\\Documents\\Easy2Do"
+  "StorageLocation": "C:\\Users\\YourName\\Documents\\Easy2Do",
+  "SyncEnabled": false,
+  "PowerSyncUrl": "https://your-powersync-url",
+  "PowerSyncDevToken": "",
+  "SyncBackendUrl": "https://your-backend",
+  "SupabaseUrl": "https://your-project.supabase.co",
+  "SupabaseApiKey": "your-supabase-api-key"
 }
 ```
 
@@ -132,8 +148,8 @@ Added new functionality:
 1. **No Manual Saving**: Everything is automatic
 2. **Data Persistence**: Notes survive app restarts
 3. **User Control**: Choose where data is stored
-4. **Portable Format**: JSON is human-readable and editable
-5. **Backup Friendly**: Easy to backup/restore/share notes
+4. **Fast Local Queries**: SQLite is optimized for local data access
+5. **Backup Friendly**: JSON backups are still produced on save
 6. **Cross-Platform**: Works on Windows, macOS, Linux
 
 ## Future Enhancements
@@ -143,3 +159,69 @@ Added new functionality:
 - Multiple note files support
 - Cloud sync integration
 - Backup/restore features
+
+## Supabase Setup Notes (Stage 3)
+
+### Tables (Postgres)
+Create tables matching the local schema. Example:
+
+```sql
+create table if not exists notes (
+  id uuid primary key,
+  title text not null,
+  color text not null,
+  created_date timestamptz not null,
+  modified_date timestamptz not null,
+  window_x double precision not null,
+  window_y double precision not null,
+  window_width double precision not null,
+  window_height double precision not null,
+  is_pinned boolean not null
+);
+
+create table if not exists note_items (
+  id uuid primary key,
+  note_id uuid not null references notes(id) on delete cascade,
+  text text not null,
+  is_completed boolean not null,
+  is_heading boolean not null,
+  is_important boolean not null,
+  text_attachment text not null,
+  due_date timestamptz null,
+  is_alarm_dismissed boolean not null,
+  snooze_until timestamptz null,
+  created_at_utc timestamptz not null,
+  updated_at_utc timestamptz not null,
+  deleted_at_utc timestamptz null,
+  position integer not null
+);
+
+create table if not exists note_order (
+  id uuid primary key,
+  note_id uuid not null references notes(id) on delete cascade,
+  sort_order integer not null
+);
+```
+
+### PowerSync Sync Rules
+Configure sync rules to mirror the tables:
+
+```yaml
+bucket_definitions:
+  all_data:
+    data:
+      - SELECT * FROM notes
+      - SELECT * FROM note_items
+      - SELECT * FROM note_order
+```
+
+### Backend Endpoints
+The client expects the following endpoints on your backend:
+- `GET /sync/token` returns `{ "token": "..." }`
+- `POST /sync/upload` accepts a PowerSync upload batch
+
+### Dev Upload Shortcut (No Backend)
+For single-user dev, the client can upload directly to Supabase REST:
+- Set `SupabaseUrl` and `SupabaseApiKey` in Settings
+- This bypasses the backend and uses PostgREST directly
+- Use an anon key if RLS is disabled, or a service role key for full access

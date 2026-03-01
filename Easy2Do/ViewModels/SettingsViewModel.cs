@@ -16,11 +16,37 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     private string _storageLocation = string.Empty;
 
+    [ObservableProperty]
+    private bool _syncEnabled;
+
+    [ObservableProperty]
+    private string _powerSyncUrl = string.Empty;
+
+    [ObservableProperty]
+    private string _powerSyncDevToken = string.Empty;
+
+    [ObservableProperty]
+    private string _syncBackendUrl = string.Empty;
+
+    [ObservableProperty]
+    private string _supabaseUrl = string.Empty;
+
+    [ObservableProperty]
+    private string _supabaseApiKey = string.Empty;
+
     public SettingsViewModel()
     {
         System.Diagnostics.Debug.WriteLine("SettingsViewModel constructed");
         StorageLocation = App.SettingsService.GetStorageLocation();
+        SyncEnabled = App.SettingsService.GetSyncEnabled();
+        PowerSyncUrl = App.SettingsService.GetPowerSyncUrl();
+        PowerSyncDevToken = App.SettingsService.GetPowerSyncDevToken();
+        SyncBackendUrl = App.SettingsService.GetSyncBackendUrl();
+        SupabaseUrl = App.SettingsService.GetSupabaseUrl();
+        SupabaseApiKey = App.SettingsService.GetSupabaseApiKey();
         _restoreBackupCommand = new AsyncRelayCommand(RestoreBackup);
+        _reconnectSyncCommand = new AsyncRelayCommand(ReconnectSyncAsync);
+        App.StorageService.SyncStatusChanged += OnSyncStatusChanged;
     }
 
     [RelayCommand]
@@ -91,6 +117,53 @@ public partial class SettingsViewModel : ViewModelBase
         }
     }
     private readonly IRelayCommand _restoreBackupCommand;
+    private readonly IRelayCommand _reconnectSyncCommand;
+
+    public IRelayCommand ReconnectSyncCommand => _reconnectSyncCommand;
+
+    partial void OnSyncEnabledChanged(bool value)
+    {
+        App.SettingsService.SetSyncEnabled(value);
+        if (value)
+            _ = App.PowerSyncService.StartAsync();
+    }
+
+    partial void OnPowerSyncUrlChanged(string value)
+    {
+        App.SettingsService.SetPowerSyncUrl(value);
+    }
+
+    partial void OnPowerSyncDevTokenChanged(string value)
+    {
+        App.SettingsService.SetPowerSyncDevToken(value);
+    }
+
+    partial void OnSyncBackendUrlChanged(string value)
+    {
+        App.SettingsService.SetSyncBackendUrl(value);
+    }
+
+    partial void OnSupabaseUrlChanged(string value)
+    {
+        App.SettingsService.SetSupabaseUrl(value);
+    }
+
+    partial void OnSupabaseApiKeyChanged(string value)
+    {
+        App.SettingsService.SetSupabaseApiKey(value);
+    }
+
+    private async Task ReconnectSyncAsync()
+    {
+        Console.WriteLine("[Sync] Reconnect requested.");
+        var result = await App.PowerSyncService.TryStartAsync();
+        Console.WriteLine($"[Sync] {result.Message}");
+    }
+
+    private void OnSyncStatusChanged(string message)
+    {
+        Console.WriteLine($"[Sync] {message}");
+    }
 
     private async Task RestoreBackup()
     {
@@ -118,8 +191,8 @@ public partial class SettingsViewModel : ViewModelBase
                 {
                     var selectedPath = files[0].Path.LocalPath;
                     System.Diagnostics.Debug.WriteLine($"Selected backup file: {selectedPath}");
-                    await App.BackupService.RestoreBackupAsync(selectedPath);
-                    System.Diagnostics.Debug.WriteLine("Called RestoreBackupAsync on BackupService.");
+                    await App.StorageService.RestoreBackupAsync(selectedPath);
+                    System.Diagnostics.Debug.WriteLine("Called RestoreBackupAsync on StorageService.");
                     // Reload notes in main view
                     if (App.MainWindow?.DataContext is Easy2Do.ViewModels.MainViewModel mainVm)
                     {
