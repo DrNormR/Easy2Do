@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Easy2Do.Models;
 
@@ -78,13 +79,15 @@ public sealed class PowerSyncService
         try
         {
             var notes = await GetSupabaseAsync<List<NoteDto>>(supabaseUrl, supabaseKey, "notes?select=*");
-            var items = await GetSupabaseAsync<List<ItemDto>>(supabaseUrl, supabaseKey, "note_items?select=*");
+            var items = await GetSupabaseAsync<List<ItemDto>>(supabaseUrl, supabaseKey, "note_items?select=*&order=position.asc");
             var order = await GetSupabaseAsync<List<OrderDto>>(supabaseUrl, supabaseKey, "note_order?select=note_id,sort_order&order=sort_order.asc");
             Console.WriteLine($"[Sync] Pulled {notes.Count} notes, {items.Count} items, {order.Count} order rows.");
 
             var notesById = new Dictionary<Guid, Note>();
             foreach (var noteDto in notes)
             {
+                if (noteDto.Id == Guid.Empty)
+                    continue;
                 var note = new Note
                 {
                     Id = noteDto.Id,
@@ -103,6 +106,8 @@ public sealed class PowerSyncService
 
             foreach (var itemDto in items)
             {
+                if (itemDto.Id == Guid.Empty || itemDto.NoteId == Guid.Empty)
+                    continue;
                 if (!notesById.TryGetValue(itemDto.NoteId, out var note))
                     continue;
 
@@ -127,10 +132,19 @@ public sealed class PowerSyncService
             var orderedIds = new List<Guid>();
             foreach (var o in order)
             {
+                if (o.NoteId == Guid.Empty)
+                    continue;
                 orderedIds.Add(o.NoteId);
             }
 
-            await _storageService.MergeRemoteNotesAsync(new List<Note>(notesById.Values), orderedIds);
+            if (notesById.Count == 0)
+            {
+                Console.WriteLine("[Sync] No remote notes found; skipping local replace.");
+                return;
+            }
+
+            Console.WriteLine("[Sync] Replacing local notes with remote snapshot.");
+            await _storageService.ReplaceAllNotesAsync(new List<Note>(notesById.Values), orderedIds);
             DataRefreshed?.Invoke();
         }
         catch (Exception ex)
@@ -159,38 +173,63 @@ public sealed class PowerSyncService
 
     private sealed class NoteDto
     {
+        [JsonPropertyName("id")]
         public Guid Id { get; set; }
+        [JsonPropertyName("title")]
         public string? Title { get; set; }
+        [JsonPropertyName("color")]
         public string? Color { get; set; }
+        [JsonPropertyName("created_date")]
         public string? CreatedDate { get; set; }
+        [JsonPropertyName("modified_date")]
         public string? ModifiedDate { get; set; }
+        [JsonPropertyName("window_x")]
         public double WindowX { get; set; }
+        [JsonPropertyName("window_y")]
         public double WindowY { get; set; }
+        [JsonPropertyName("window_width")]
         public double WindowWidth { get; set; }
+        [JsonPropertyName("window_height")]
         public double WindowHeight { get; set; }
+        [JsonPropertyName("is_pinned")]
         public bool IsPinned { get; set; }
     }
 
     private sealed class ItemDto
     {
+        [JsonPropertyName("id")]
         public Guid Id { get; set; }
+        [JsonPropertyName("note_id")]
         public Guid NoteId { get; set; }
+        [JsonPropertyName("text")]
         public string? Text { get; set; }
+        [JsonPropertyName("is_completed")]
         public bool IsCompleted { get; set; }
+        [JsonPropertyName("is_heading")]
         public bool IsHeading { get; set; }
+        [JsonPropertyName("is_important")]
         public bool IsImportant { get; set; }
+        [JsonPropertyName("text_attachment")]
         public string? TextAttachment { get; set; }
+        [JsonPropertyName("due_date")]
         public string? DueDate { get; set; }
+        [JsonPropertyName("is_alarm_dismissed")]
         public bool IsAlarmDismissed { get; set; }
+        [JsonPropertyName("snooze_until")]
         public string? SnoozeUntil { get; set; }
+        [JsonPropertyName("created_at_utc")]
         public string? CreatedAtUtc { get; set; }
+        [JsonPropertyName("updated_at_utc")]
         public string? UpdatedAtUtc { get; set; }
+        [JsonPropertyName("deleted_at_utc")]
         public string? DeletedAtUtc { get; set; }
     }
 
     private sealed class OrderDto
     {
+        [JsonPropertyName("note_id")]
         public Guid NoteId { get; set; }
+        [JsonPropertyName("sort_order")]
         public int SortOrder { get; set; }
     }
 }
