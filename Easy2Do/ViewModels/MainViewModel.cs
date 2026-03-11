@@ -28,9 +28,25 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private Note? _selectedNote;
 
+    [ObservableProperty]
+    private ViewModelBase? _activeDetailViewModel;
+
+    public bool HasActiveDetail => ActiveDetailViewModel != null;
+
+    partial void OnActiveDetailViewModelChanged(ViewModelBase? value)
+    {
+        OnPropertyChanged(nameof(HasActiveDetail));
+    }
+
+    [RelayCommand]
+    private void CloseDetail()
+    {
+        ActiveDetailViewModel = null;
+    }
+
     private bool _isLoading;
     private readonly Dictionary<Guid, CancellationTokenSource> _saveCtsMap = new();
-    private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(1200);
+    private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(500);
 
     public MainViewModel()
     {
@@ -58,99 +74,17 @@ public partial class MainViewModel : ViewModelBase
             await App.StorageService.MigrateIfNeededAsync();
             var loadedNotes = await App.StorageService.LoadAllNotesAsync();
             System.Diagnostics.Debug.WriteLine($"LoadNotesAsync: loaded {loadedNotes.Count} notes.");
-            ApplyLoadedNotes(loadedNotes);
+            Notes.Clear();
+            foreach (var note in loadedNotes)
+            {
+                System.Diagnostics.Debug.WriteLine($"Loaded note: {note.Id} - {note.Title}");
+                SubscribeNote(note);
+                Notes.Add(note);
+            }
         }
         finally
         {
             _isLoading = false;
-        }
-    }
-
-    private void ApplyLoadedNotes(IReadOnlyList<Note> loadedNotes)
-    {
-        var existingById = Notes.ToDictionary(n => n.Id, n => n);
-        var loadedIds = new HashSet<Guid>();
-
-        foreach (var note in loadedNotes)
-        {
-            loadedIds.Add(note.Id);
-            System.Diagnostics.Debug.WriteLine($"Loaded note: {note.Id} - {note.Title}");
-
-            if (existingById.TryGetValue(note.Id, out var existing))
-            {
-                UpdateExistingNote(existing, note);
-                continue;
-            }
-
-            SubscribeNote(note);
-            Notes.Add(note);
-        }
-
-        var toRemove = Notes.Where(n => !loadedIds.Contains(n.Id)).ToList();
-        foreach (var note in toRemove)
-        {
-            UnsubscribeNote(note);
-            Notes.Remove(note);
-            if (SelectedNote?.Id == note.Id)
-                SelectedNote = null;
-        }
-    }
-
-    private void UpdateExistingNote(Note target, Note incoming)
-    {
-        target.IsReloading = true;
-        try
-        {
-            target.Title = incoming.Title;
-            target.Color = incoming.Color;
-            target.CreatedDate = incoming.CreatedDate;
-            target.ModifiedDate = incoming.ModifiedDate;
-            target.WindowX = incoming.WindowX;
-            target.WindowY = incoming.WindowY;
-            target.WindowWidth = incoming.WindowWidth;
-            target.WindowHeight = incoming.WindowHeight;
-            target.IsPinned = incoming.IsPinned;
-
-            ApplyItems(target, incoming);
-        }
-        finally
-        {
-            target.IsReloading = false;
-        }
-    }
-
-    private void ApplyItems(Note target, Note incoming)
-    {
-        var existingById = target.Items.ToDictionary(i => i.Id, i => i);
-        var desired = new List<TodoItem>();
-
-        foreach (var incomingItem in incoming.Items)
-        {
-            if (existingById.TryGetValue(incomingItem.Id, out var existing))
-            {
-                existing.Text = incomingItem.Text;
-                existing.IsCompleted = incomingItem.IsCompleted;
-                existing.IsHeading = incomingItem.IsHeading;
-                existing.IsImportant = incomingItem.IsImportant;
-                existing.TextAttachment = incomingItem.TextAttachment;
-                existing.DueDate = incomingItem.DueDate;
-                existing.IsAlarmDismissed = incomingItem.IsAlarmDismissed;
-                existing.SnoozeUntil = incomingItem.SnoozeUntil;
-                existing.CreatedAtUtc = incomingItem.CreatedAtUtc;
-                existing.UpdatedAtUtc = incomingItem.UpdatedAtUtc;
-                existing.DeletedAtUtc = incomingItem.DeletedAtUtc;
-                desired.Add(existing);
-            }
-            else
-            {
-                desired.Add(incomingItem);
-            }
-        }
-
-        target.Items.Clear();
-        foreach (var item in desired)
-        {
-            target.Items.Add(item);
         }
     }
 
@@ -208,8 +142,6 @@ public partial class MainViewModel : ViewModelBase
     private void OnItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (sender is not TodoItem item) return;
-        if (e.PropertyName is nameof(TodoItem.UpdatedAtUtc) or nameof(TodoItem.CreatedAtUtc) or nameof(TodoItem.DeletedAtUtc) or nameof(TodoItem.Id))
-            return;
         var note = Notes.FirstOrDefault(n => n.Items.Contains(item));
         if (note is null) return;
         if (note.IsReloading) return;
@@ -238,11 +170,9 @@ public partial class MainViewModel : ViewModelBase
     {
         try
         {
-            System.Diagnostics.Debug.WriteLine($"[Save] Debounce start {note.Id} '{note.Title}'");
             await Task.Delay(DebounceDelay, token);
             await App.StorageService.SaveNoteAsync(note);
             await SaveManifestAsync();
-            System.Diagnostics.Debug.WriteLine($"[Save] Debounce done {note.Id} '{note.Title}'");
         }
         catch (TaskCanceledException) { }
         catch (InvalidOperationException ex)
@@ -427,30 +357,36 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private void OpenNote(Note? note)
     {
-        if (note == null) return;
-        var noteViewModel = new NoteViewModel(note);
-        var noteWindow = new NoteWindow
+        if (note != null)
         {
-            DataContext = noteViewModel
-        };
-        noteWindow.Show();
+            var noteViewModel = new NoteViewModel(note);
+            if (OperatingSystem.IsIOS() || OperatingSystem.IsAndroid())
+            {
+                ActiveDetailViewModel = noteViewModel;
+            }
+            else
+            {
+                var noteWindow = new NoteWindow { DataContext = noteViewModel };
+                noteWindow.Show();
+            }
+        }
     }
 
     [RelayCommand]
     private void OpenSettings()
     {
         var settingsViewModel = new SettingsViewModel();
-        var settingsWindow = new SettingsWindow
+        if (OperatingSystem.IsIOS() || OperatingSystem.IsAndroid())
         {
-            DataContext = settingsViewModel
-        };
-        if (App.MainWindow != null)
-        {
-            settingsWindow.ShowDialog(App.MainWindow);
+            ActiveDetailViewModel = settingsViewModel;
         }
         else
         {
-            settingsWindow.Show();
+            var settingsWindow = new SettingsWindow { DataContext = settingsViewModel };
+            if (App.MainWindow != null)
+                settingsWindow.ShowDialog(App.MainWindow);
+            else
+                settingsWindow.Show();
         }
     }
 
@@ -489,15 +425,6 @@ public partial class MainViewModel : ViewModelBase
                 await dlg.ShowDialog(window);
             }
         });
-    }
-
-    public async Task FlushNoteAsync(Guid noteId)
-    {
-        var note = Notes.FirstOrDefault(n => n.Id == noteId);
-        if (note == null) return;
-        CancelPendingSave(noteId);
-        await App.StorageService.SaveNoteAsync(note);
-        await SaveManifestAsync();
     }
 }
 

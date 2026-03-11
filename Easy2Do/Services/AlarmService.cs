@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using Avalonia.Threading;
 using Easy2Do.Models;
 using Easy2Do.Views;
@@ -16,9 +17,16 @@ public class AlarmService : IDisposable
     private Func<ObservableCollection<Note>>? _getNotesFunc;
     private readonly HashSet<string> _activeAlarms = new();
 
+    /// <summary>
+    /// Optional callback set by the host platform project for platforms not
+    /// handled inline (e.g. iOS via AudioToolbox set from AppDelegate).
+    /// </summary>
+    public Action? PlatformSoundAction { get; set; }
+
     private const uint SND_ALIAS = 0x00010000;
     private const uint SND_ASYNC = 0x0001;
 
+    [SupportedOSPlatform("windows")]
     [DllImport("winmm.dll", CharSet = CharSet.Unicode)]
     private static extern bool PlaySound(string? pszSound, IntPtr hmod, uint fdwSound);
 
@@ -90,7 +98,7 @@ public class AlarmService : IDisposable
         window.Show();
     }
 
-    private static void PlayAlarmSound()
+    private void PlayAlarmSound()
     {
         try
         {
@@ -113,6 +121,11 @@ public class AlarmService : IDisposable
                 // Try paplay (PulseAudio) first, then aplay (ALSA)
                 var played = TryRunProcess("paplay", "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga")
                           || TryRunProcess("aplay", "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga");
+            }
+            else
+            {
+                // Delegate to the platform project (e.g. iOS AppDelegate)
+                PlatformSoundAction?.Invoke();
             }
         }
         catch

@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Easy2Do.Models;
-using Easy2Do.Views;
 
 namespace Easy2Do.ViewModels;
 
@@ -99,10 +98,7 @@ public partial class NoteViewModel : ViewModelBase
     [RelayCommand]
     private async Task RefreshNote()
     {
-        if (Easy2Do.App.MainWindow?.DataContext is MainViewModel mainVm)
-        {
-            mainVm.CancelPendingSave(Note.Id);
-        }
+        Easy2Do.App.MainViewModel?.CancelPendingSave(Note.Id);
 
         // Reload note from disk
         var reloaded = await Easy2Do.App.StorageService.LoadNoteAsync(Note.Id);

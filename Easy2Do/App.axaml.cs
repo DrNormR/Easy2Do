@@ -3,21 +3,22 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core;
 using Avalonia.Data.Core.Plugins;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Markup.Xaml;
 using Easy2Do.ViewModels;
 using Easy2Do.Views;
 using Easy2Do.Services;
-using Avalonia.Threading;
 
 namespace Easy2Do;
 
 public partial class App : Application
 {
     public static MainWindow? MainWindow { get; private set; }
+    public static MainViewModel? MainViewModel { get; private set; }
     public static SettingsService SettingsService { get; private set; } = null!;
     public static StorageService StorageService { get; private set; } = null!;
-    public static PowerSyncService PowerSyncService { get; private set; } = null!;
     public static AlarmService AlarmService { get; private set; } = null!;
+    public static BackupService BackupService { get; private set; } = null!;
 
     public override void Initialize()
     {
@@ -25,65 +26,61 @@ public partial class App : Application
         // Initialize services
         SettingsService = new SettingsService();
         StorageService = new StorageService(SettingsService);
-        PowerSyncService = new PowerSyncService(SettingsService, StorageService);
         AlarmService = new AlarmService();
+        BackupService = new BackupService(SettingsService);
     }
 
     public override void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // Avoid duplicate validations from both Avalonia and the CommunityToolkit. 
+            // Avoid duplicate validations from both Avalonia and the CommunityToolkit.
             // More info: https://docs.avaloniaui.net/docs/guides/development-guides/data-validation#manage-validationplugins
             DisableAvaloniaDataAnnotationValidation();
+            var desktopViewModel = new MainViewModel();
+            MainViewModel = desktopViewModel;
             MainWindow = new MainWindow
             {
-                DataContext = new MainViewModel()
+                DataContext = desktopViewModel
             };
             desktop.MainWindow = MainWindow;
-            desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnLastWindowClose;
 
             // Start alarm service to monitor due dates
-            var viewModel = (MainViewModel)MainWindow.DataContext!;
-            AlarmService.Start(() => viewModel.Notes);
-            _ = PowerSyncService.StartAsync();
-            PowerSyncService.DataRefreshed += () =>
-            {
-                Dispatcher.UIThread.Post(async () => await viewModel.LoadNotesAsync());
-            };
+            AlarmService.Start(() => desktopViewModel.Notes);
 
             // Handle application exit to save notes
             desktop.Exit += OnExit;
         }
         else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
         {
+            var mobileViewModel = new MainViewModel();
+            MainViewModel = mobileViewModel;
             singleViewPlatform.MainView = new MainView
             {
-                DataContext = new MainViewModel()
+                DataContext = mobileViewModel
             };
+
+            // Start alarm service for mobile too
+            AlarmService.Start(() => mobileViewModel.Notes);
         }
 
         base.OnFrameworkInitializationCompleted();
     }
 
-    private void OnExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
+    public static async Task SaveAllNotesAsync()
+    {
+        if (MainViewModel == null) return;
+        foreach (var note in MainViewModel.Notes)
+            await StorageService.SaveNoteAsync(note);
+        var ids = MainViewModel.Notes.Select(n => n.Id).ToList();
+        await StorageService.SaveManifestAsync(ids);
+    }
+
+    private async void OnExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
     {
         AlarmService.Stop();
         StorageService.StopWatching();
-
-        // Save all notes when application closes
-        if (MainWindow?.DataContext is MainViewModel viewModel)
-        {
-            System.Console.WriteLine($"[App] Exit: saving {viewModel.Notes.Count} notes");
-            foreach (var note in viewModel.Notes)
-                System.Console.WriteLine($"[App] Exit note {note.Id} '{note.Title}'");
-            foreach (var note in viewModel.Notes)
-            {
-                StorageService.SaveNoteAsync(note).GetAwaiter().GetResult();
-            }
-            var ids = viewModel.Notes.Select(n => n.Id).ToList();
-            StorageService.SaveManifestAsync(ids).GetAwaiter().GetResult();
-        }
+        await SaveAllNotesAsync();
     }
 
     private void DisableAvaloniaDataAnnotationValidation()
