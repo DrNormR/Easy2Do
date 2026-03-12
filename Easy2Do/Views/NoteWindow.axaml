@@ -3,7 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:Easy2Do.ViewModels"
-        xmlns:views="using:Easy2Do.Views"
+        xmlns:conv="using:Easy2Do.Converters"
         mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="500"
         x:Class="Easy2Do.Views.NoteWindow"
         x:DataType="vm:NoteViewModel"
@@ -14,9 +14,520 @@
         MinWidth="280" MinHeight="350"
         Background="{Binding Note.Color}">
 
+  <Window.Resources>
+    <conv:BoolToBrushConverter x:Key="ImportantBrush" TrueBrush="#D32F2F" FalseBrush="#000000" />
+    <conv:BoolToBrushConverter x:Key="ImportantCompletedBrush" TrueBrush="#D32F2F" FalseBrush="#FF888888" />
+    <conv:BoolToBrushConverter x:Key="ImportantButtonBrush" TrueBrush="#D32F2F" FalseBrush="#888888" />
+    <conv:BoolToBrushConverter x:Key="ImportantRowBrush" TrueBrush="#1AD32F2F" FalseBrush="Transparent" />
+    <conv:BoolOrMultiConverter x:Key="BoolOrConverter" />
+    <conv:BoolAndConverter x:Key="BoolAndConverter" />
+    <conv:BoolToFontWeightConverter x:Key="ImportantFontWeight" />
+    <conv:BoolToThicknessConverter x:Key="HeadingIndent" TrueThickness="6,5,0,5" FalseThickness="6,5,0,5" />
+    <conv:BoolToThicknessConverter x:Key="HeadingCheckIndent" TrueThickness="0,0,3,0" FalseThickness="2,0,3,0" />
+    <conv:BoolToThicknessConverter x:Key="HeadingTextIndent" TrueThickness="0,0,0,0" FalseThickness="1,0,0,0" />
+    <conv:BoolNotConverter x:Key="NotConverter" />
+    <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillChecked" Color="#999999"/>
+    <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" Color="#888888"/>
+    <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPressed" Color="#777777"/>
+  </Window.Resources>
+
+  <Window.Styles>
+    <Style Selector="TextBox.inline-editor">
+      <Style.Resources>
+        <SolidColorBrush x:Key="TextControlBackground" Color="#00FFFFFF"/>
+        <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#33FFFFFF"/>
+        <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#CCFFFFFF"/>
+        <SolidColorBrush x:Key="TextControlForeground" Color="#FF222222"/>
+        <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FF222222"/>
+        <SolidColorBrush x:Key="TextControlBorderBrush" Color="#00000000"/>
+        <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#33000000"/>
+        <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#66000000"/>
+      </Style.Resources>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="#FF222222"/>
+      <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+
+    <!-- Keep in-place editors readable in dark theme -->
+    <Style Selector="TextBox.inline-editor:focus-within">
+      <Setter Property="Background" Value="#CCFFFFFF"/>
+      <Setter Property="Foreground" Value="#FF222222"/>
+      <Setter Property="BorderBrush" Value="#66000000"/>
+      <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+
+    <Style Selector="TextBox.inline-editor:focus">
+      <Setter Property="Background" Value="#CCFFFFFF"/>
+      <Setter Property="Foreground" Value="#FF222222"/>
+      <Setter Property="BorderBrush" Value="#66000000"/>
+      <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+
+  </Window.Styles>
+
   <Design.DataContext>
     <vm:NoteViewModel />
   </Design.DataContext>
 
-  <views:NoteView />
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Focusable="True" PointerPressed="OnBackgroundPointerPressed">
+    <!-- Title Section -->
+    <Border Grid.Row="0" 
+            Background="#33000000" 
+            Padding="10,6"
+            CornerRadius="5,5,0,0"
+            Margin="8,8,8,3">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+        <TextBox Grid.Column="0"
+                 x:Name="TitleTextBox"
+                 Classes="inline-editor"
+                 Text="{Binding Note.Title, UpdateSourceTrigger=PropertyChanged}"
+                 FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
+                 FontSize="16"
+                 FontWeight="Normal"
+                 Foreground="#FF222222"
+                 Watermark="Note Title..."
+                 GotFocus="OnTitleTextBoxGotFocus"
+                 PointerPressed="OnTitleTextBoxPointerPressed"
+                 KeyDown="OnTitleTextBoxKeyDown"/>
+
+        <!-- Pin Button -->
+        <Button Grid.Column="1"
+                Command="{Binding TogglePinCommand}"
+                FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
+                FontSize="14"
+                Padding="4"
+                Background="Transparent"
+                BorderThickness="0">
+          <Panel>
+            <TextBlock Text="&#x1F4CC;"
+                       IsVisible="{Binding Note.IsPinned, Converter={StaticResource NotConverter}}"/>
+            <TextBlock Text="&#x1F4CD;"
+                       IsVisible="{Binding Note.IsPinned}"/>
+          </Panel>
+        </Button>
+        <!-- Refresh Button -->
+        <Button Grid.Column="2"
+                Command="{Binding RefreshNoteCommand}"
+                Content="&#x21bb;"
+                FontSize="14"
+                Padding="4"
+                Background="Transparent"
+                BorderThickness="0"
+                ToolTip.Tip="Refresh Note"/>
+
+        <!-- Color Picker Menu -->
+        <DropDownButton Grid.Column="3"
+                        Content="&#x1F3A8;"
+                        FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
+                        FontSize="14"
+                        Padding="4"
+                        Background="Transparent"
+                        BorderThickness="0">
+          <DropDownButton.Flyout>
+            <MenuFlyout Placement="Bottom">
+              <!-- White -->
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFFFFFFF">
+                <MenuItem.Header>
+                  <Border Background="#FFFFFFFF" Width="100" Height="18" CornerRadius="3" BorderBrush="#CCCCCC" BorderThickness="1"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <!-- Neons -->
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFFFE680">
+                <MenuItem.Header>
+                  <Border Background="#FFFFE680" Width="100" Height="18" CornerRadius="3"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFFF9999">
+                <MenuItem.Header>
+                  <Border Background="#FFFF9999" Width="100" Height="18" CornerRadius="3"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FF99FF99">
+                <MenuItem.Header>
+                  <Border Background="#FF99FF99" Width="100" Height="18" CornerRadius="3"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FF99CCFF">
+                <MenuItem.Header>
+                  <Border Background="#FF99CCFF" Width="100" Height="18" CornerRadius="3"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFFFCC99">
+                <MenuItem.Header>
+                  <Border Background="#FFFFCC99" Width="100" Height="18" CornerRadius="3"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFFF99FF">
+                <MenuItem.Header>
+                  <Border Background="#FFFF99FF" Width="100" Height="18" CornerRadius="3"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFCCCCCC">
+                <MenuItem.Header>
+                  <Border Background="#FFCCCCCC" Width="100" Height="18" CornerRadius="3"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <!-- Pastels -->
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFFFF3E0">
+                <MenuItem.Header>
+                  <Border Background="#FFFFF3E0" Width="100" Height="18" CornerRadius="3" BorderBrush="#666666" BorderThickness="1"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFE8F5E9">
+                <MenuItem.Header>
+                  <Border Background="#FFE8F5E9" Width="100" Height="18" CornerRadius="3" BorderBrush="#666666" BorderThickness="1"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFE3F2FD">
+                <MenuItem.Header>
+                  <Border Background="#FFE3F2FD" Width="100" Height="18" CornerRadius="3" BorderBrush="#666666" BorderThickness="1"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFF3E5F5">
+                <MenuItem.Header>
+                  <Border Background="#FFF3E5F5" Width="100" Height="18" CornerRadius="3" BorderBrush="#666666" BorderThickness="1"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFFCE4EC">
+                <MenuItem.Header>
+                  <Border Background="#FFFCE4EC" Width="100" Height="18" CornerRadius="3" BorderBrush="#666666" BorderThickness="1"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFFFF8E1">
+                <MenuItem.Header>
+                  <Border Background="#FFFFF8E1" Width="100" Height="18" CornerRadius="3" BorderBrush="#666666" BorderThickness="1"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Command="{Binding ChangeColorCommand}" CommandParameter="#FFE0F7FA">
+                <MenuItem.Header>
+                  <Border Background="#FFE0F7FA" Width="100" Height="18" CornerRadius="3" BorderBrush="#666666" BorderThickness="1"/>
+                </MenuItem.Header>
+              </MenuItem>
+              <Separator />
+              <MenuItem Header="Custom..." Click="OnCustomColorMenuItemClick"/>
+            </MenuFlyout>
+          </DropDownButton.Flyout>
+        </DropDownButton>
+      </Grid>
+    </Border>
+
+    <!-- Separator -->
+    <Border Grid.Row="1" 
+            Height="1" 
+            Background="#66000000" 
+            Margin="16,3,16,6"/>
+
+    <!-- Items List -->
+    <ScrollViewer Grid.Row="2" Margin="4,0,4,6" Focusable="True" PointerPressed="OnBackgroundPointerPressed"
+                  HorizontalScrollBarVisibility="Disabled">
+      <ItemsControl x:Name="ItemsControl" ItemsSource="{Binding Note.Items}" x:CompileBindings="False" DragDrop.AllowDrop="True">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Grid x:Name="ItemRow" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="1" Margin="2,0,0,0" MinHeight="6"
+                  DragDrop.AllowDrop="True"
+                  DragDrop.DragEnter="OnItemRowDragEnter"
+                  DragDrop.DragOver="OnItemRowDragOver"
+                  DragDrop.DragLeave="OnItemRowDragLeave"
+                  DragDrop.Drop="OnItemRowDrop"
+                  Background="{Binding IsImportant, Converter={StaticResource ImportantRowBrush}}">
+              <Border x:Name="DropIndicatorBefore"
+                      Grid.ColumnSpan="7"
+                      Height="3"
+                      Background="#888888"
+                      VerticalAlignment="Top"
+                      HorizontalAlignment="Stretch"
+                      IsVisible="False"
+                      IsHitTestVisible="False"/>
+              <Border x:Name="DropIndicatorAfter"
+                      Grid.ColumnSpan="7"
+                      Height="3"
+                      Background="#888888"
+                      VerticalAlignment="Bottom"
+                      HorizontalAlignment="Stretch"
+                      IsVisible="False"
+                      IsHitTestVisible="False"/>
+
+              <!-- Move Handle -->
+              <Border x:Name="MoveHandle"
+                      Grid.Column="0"
+                      Width="16"
+                      Background="Transparent"
+                      Cursor="Hand"
+                      HorizontalAlignment="Left"
+                      PointerPressed="OnMoveHandlePointerPressed">
+                <Border.Opacity>
+                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
+                    <Binding Path="#ItemRow.IsPointerOver" />
+                  </MultiBinding>
+                </Border.Opacity>
+                <TextBlock Text="&#x2630;"
+                           FontSize="13"
+                           Foreground="#888888"
+                           Padding="1"
+                           VerticalAlignment="Center"/>
+              </Border>
+              <!-- Important Button -->
+              <Button x:Name="ImportantButton"
+                      Grid.Column="1"
+                      Width="20"
+                      Content="&#x1F6A8;"
+                      FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
+                      HorizontalAlignment="Left"
+                      Background="Transparent"
+                      BorderThickness="0"
+                      FontSize="14"
+                      Padding="0"
+                      Margin="0,0,2,0"
+                      Foreground="{Binding IsImportant, Converter={StaticResource ImportantButtonBrush}}"
+                      IsVisible="True"
+                      Click="OnImportantButtonClick">
+                <Button.Opacity>
+                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
+                    <Binding Path="IsImportant" />
+                    <Binding Path="#ItemRow.IsPointerOver" />
+                  </MultiBinding>
+                </Button.Opacity>
+                <Button.IsHitTestVisible>
+                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
+                    <Binding Path="IsImportant" />
+                    <Binding Path="#ItemRow.IsPointerOver" />
+                  </MultiBinding>
+                </Button.IsHitTestVisible>
+              </Button>
+
+              <!-- Checkbox -->
+              <CheckBox Grid.Column="2" 
+                        IsChecked="{Binding IsCompleted}"
+                        IsVisible="{Binding IsHeading, Converter={StaticResource NotConverter}}"
+                        IsEnabled="{Binding IsHeading, Converter={StaticResource NotConverter}}"
+                        VerticalAlignment="Center"
+                        Margin="{Binding IsHeading, Converter={StaticResource HeadingCheckIndent}}"
+                        RenderTransformOrigin="0.5,0.5">
+                <CheckBox.RenderTransform>
+                  <ScaleTransform ScaleX="0.9" ScaleY="0.9"/>
+                </CheckBox.RenderTransform>
+              </CheckBox>
+              
+              <!-- Item Text with conditional styling -->
+              <Grid Grid.Column="3">
+                <!-- Heading text -->
+                <TextBox Text="{Binding Text}"
+                         Classes="inline-editor"
+                         FontSize="16"
+                         TextWrapping="Wrap"
+                         VerticalAlignment="Center"
+                         IsVisible="{Binding IsHeading}"
+                         Foreground="{Binding IsImportant, Converter={StaticResource ImportantBrush}}"
+                         FontWeight="Bold"
+                         Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"
+                         Padding="0"
+                         MinHeight="0"
+                         FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
+                         GotFocus="OnItemTextBoxGotFocus"
+                         KeyDown="OnItemTextBoxKeyDown"/>
+
+                <!-- Show non-strikethrough text when not completed (non-heading) -->
+                <TextBox Text="{Binding Text}"
+                         Classes="inline-editor"
+                         FontSize="12"
+                         TextWrapping="Wrap"
+                         VerticalAlignment="Center"
+                         FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"
+                         Padding="0"
+                         MinHeight="0"
+                         FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
+                         GotFocus="OnItemTextBoxGotFocus"
+                         KeyDown="OnItemTextBoxKeyDown">
+                  <TextBox.Margin>
+                    <Binding Path="IsHeading" Converter="{StaticResource HeadingTextIndent}" />
+                  </TextBox.Margin>
+                  <TextBox.IsVisible>
+                    <MultiBinding Converter="{StaticResource BoolAndConverter}">
+                      <Binding Path="IsHeading" Converter="{StaticResource NotConverter}" />
+                      <Binding Path="IsCompleted" Converter="{StaticResource NotConverter}" />
+                    </MultiBinding>
+                  </TextBox.IsVisible>
+                  <TextBox.Foreground>
+                    <Binding Path="IsImportant" Converter="{StaticResource ImportantBrush}" />
+                  </TextBox.Foreground>
+                </TextBox>
+                
+                <!-- Show strikethrough text when completed (non-heading) -->
+                <Grid>
+                  <TextBox Text="{Binding Text}"
+                           Classes="inline-editor"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           VerticalAlignment="Center"
+                           FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"
+                           Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"
+                           Padding="0"
+                           MinHeight="0"
+                           FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
+                           GotFocus="OnItemTextBoxGotFocus"
+                           KeyDown="OnItemTextBoxKeyDown">
+                    <TextBox.IsVisible>
+                      <MultiBinding Converter="{StaticResource BoolAndConverter}">
+                        <Binding Path="IsHeading" Converter="{StaticResource NotConverter}" />
+                        <Binding Path="IsCompleted" />
+                      </MultiBinding>
+                    </TextBox.IsVisible>
+                    <TextBox.Foreground>
+                      <Binding Path="IsImportant" Converter="{StaticResource ImportantCompletedBrush}" />
+                    </TextBox.Foreground>
+                  </TextBox>
+                  <TextBlock Text="{Binding Text}"
+                             FontSize="12"
+                             TextWrapping="Wrap"
+                             VerticalAlignment="Center"
+                             FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"
+                             Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"
+                             Padding="0"
+                             FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
+                             Foreground="Transparent"
+                             IsHitTestVisible="False">
+                    <TextBlock.IsVisible>
+                      <MultiBinding Converter="{StaticResource BoolAndConverter}">
+                        <Binding Path="IsHeading" Converter="{StaticResource NotConverter}" />
+                        <Binding Path="IsCompleted" />
+                      </MultiBinding>
+                    </TextBlock.IsVisible>
+                    <TextBlock.TextDecorations>
+                      <TextDecorationCollection>
+                        <TextDecoration Location="Strikethrough" StrokeThickness="1">
+                          <TextDecoration.Stroke>
+                            <SolidColorBrush Color="#888888"/>
+                          </TextDecoration.Stroke>
+                        </TextDecoration>
+                      </TextDecorationCollection>
+                    </TextBlock.TextDecorations>
+                  </TextBlock>
+                </Grid>
+              </Grid>
+
+              <!-- Attachment Button -->
+              <Button x:Name="AttachmentButton"
+                      Grid.Column="4"
+                      Width="18"
+                      Content="&#x1F4CE;"
+                      FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
+                      Background="Transparent"
+                      BorderThickness="0"
+                      FontSize="13"
+                      Padding="0"
+                      Margin="0,0,0,0"
+                      Foreground="#555555"
+                      Click="OnAttachmentButtonClick">
+                <Button.Opacity>
+                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
+                    <Binding Path="HasTextAttachment" />
+                    <Binding Path="#ItemRow.IsPointerOver" />
+                  </MultiBinding>
+                </Button.Opacity>
+                <Button.IsHitTestVisible>
+                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
+                    <Binding Path="HasTextAttachment" />
+                    <Binding Path="#ItemRow.IsPointerOver" />
+                  </MultiBinding>
+                </Button.IsHitTestVisible>
+              </Button>
+
+<!-- Due Date Button -->
+<Button x:Name="DueDateButton"
+        Grid.Column="5"
+        Width="18"
+        Content="&#x1F4C5;"
+        FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
+        Background="Transparent"
+        BorderThickness="0"
+        FontSize="13"
+        Padding="0"
+        Margin="0,0,0,0"
+        Foreground="#555555"
+        Click="OnDueDateButtonClick">
+  <Button.Opacity>
+    <MultiBinding Converter="{StaticResource BoolOrConverter}">
+      <Binding Path="HasDueDate" />
+      <Binding Path="#ItemRow.IsPointerOver" />
+    </MultiBinding>
+  </Button.Opacity>
+  <Button.IsHitTestVisible>
+    <MultiBinding Converter="{StaticResource BoolOrConverter}">
+      <Binding Path="HasDueDate" />
+      <Binding Path="#ItemRow.IsPointerOver" />
+    </MultiBinding>
+  </Button.IsHitTestVisible>
+</Button>
+
+<!-- Delete Button -->
+<Button Grid.Column="6"
+                      Width="18"
+                      Content="X"
+                      Command="{Binding $parent[ItemsControl].DataContext.RemoveItemCommand}"
+                      CommandParameter="{Binding}"
+                      Background="Transparent"
+                      BorderThickness="0"
+                      FontSize="11"
+                      Padding="0"
+                      Margin="3,0,14,0"
+                      Foreground="#D32F2F">
+                <Button.Opacity>
+                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
+                    <Binding Path="#ItemRow.IsPointerOver" />
+                  </MultiBinding>
+                </Button.Opacity>
+                <Button.IsHitTestVisible>
+                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
+                    <Binding Path="#ItemRow.IsPointerOver" />
+                  </MultiBinding>
+                </Button.IsHitTestVisible>
+              </Button>
+            </Grid>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+
+    <!-- Input Area -->
+    <Border Grid.Row="3" 
+            Background="#33000000" 
+            Padding="10"
+            CornerRadius="0,0,5,5"
+            Margin="8,3,8,8">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <ToggleButton Grid.Column="0"
+                      Width="30"
+                      Content="H"
+                      FontWeight="Bold"
+                      FontSize="13"
+                      Background="#FFE0E0E0"
+                      BorderBrush="#FFAAAAAA"
+                      BorderThickness="1"
+                      Padding="4,6"
+                      Margin="0,0,6,0"
+                      IsChecked="{Binding NewItemIsHeading, Mode=TwoWay}"/>
+
+        <TextBox Grid.Column="1"
+                 Text="{Binding NewItemText}"
+                 Watermark="Add new item..."
+                 Background="White"
+                 BorderBrush="#FFAAAAAA"
+                 BorderThickness="1"
+                 Padding="6"
+                 CornerRadius="3"
+                 FontSize="12"
+                 KeyDown="OnTextBoxKeyDown"/>
+        
+        <Button Grid.Column="2"
+                Content="+"
+                Command="{Binding AddItemCommand}"
+                Background="#FF4CAF50"
+                Foreground="White"
+                Padding="8,6"
+                Margin="8,0,0,0"
+                CornerRadius="3"
+                FontSize="14"/>
+      </Grid>
+    </Border>
+  </Grid>
 </Window>

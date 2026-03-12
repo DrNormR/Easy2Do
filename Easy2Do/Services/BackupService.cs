@@ -210,13 +210,13 @@ public class BackupService
             if (File.Exists(manifestPath))
             {
                 var manifestJson = await File.ReadAllTextAsync(manifestPath);
-                noteIds = System.Text.Json.JsonSerializer.Deserialize<List<Guid>>(manifestJson, AppJsonContext.Default.Options) ?? new();
+                noteIds = System.Text.Json.JsonSerializer.Deserialize<List<Guid>>(manifestJson) ?? new();
                 System.Diagnostics.Debug.WriteLine($"Loaded manifest, count: {noteIds.Count}");
             }
             if (!noteIds.Contains(noteId))
             {
                 noteIds.Add(noteId);
-                var updatedManifest = System.Text.Json.JsonSerializer.Serialize(noteIds, AppJsonContext.Default.Options);
+                var updatedManifest = System.Text.Json.JsonSerializer.Serialize(noteIds);
                 await File.WriteAllTextAsync(manifestPath, updatedManifest);
                 System.Diagnostics.Debug.WriteLine($"Updated manifest with noteId: {noteId}");
             }

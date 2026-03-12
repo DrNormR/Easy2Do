@@ -28,22 +28,6 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private Note? _selectedNote;
 
-    [ObservableProperty]
-    private ViewModelBase? _activeDetailViewModel;
-
-    public bool HasActiveDetail => ActiveDetailViewModel != null;
-
-    partial void OnActiveDetailViewModelChanged(ViewModelBase? value)
-    {
-        OnPropertyChanged(nameof(HasActiveDetail));
-    }
-
-    [RelayCommand]
-    private void CloseDetail()
-    {
-        ActiveDetailViewModel = null;
-    }
-
     private bool _isLoading;
     private readonly Dictionary<Guid, CancellationTokenSource> _saveCtsMap = new();
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(500);
@@ -360,15 +344,11 @@ public partial class MainViewModel : ViewModelBase
         if (note != null)
         {
             var noteViewModel = new NoteViewModel(note);
-            if (OperatingSystem.IsIOS() || OperatingSystem.IsAndroid())
+            var noteWindow = new NoteWindow
             {
-                ActiveDetailViewModel = noteViewModel;
-            }
-            else
-            {
-                var noteWindow = new NoteWindow { DataContext = noteViewModel };
-                noteWindow.Show();
-            }
+                DataContext = noteViewModel
+            };
+            noteWindow.Show();
         }
     }
 
@@ -376,17 +356,17 @@ public partial class MainViewModel : ViewModelBase
     private void OpenSettings()
     {
         var settingsViewModel = new SettingsViewModel();
-        if (OperatingSystem.IsIOS() || OperatingSystem.IsAndroid())
+        var settingsWindow = new SettingsWindow
         {
-            ActiveDetailViewModel = settingsViewModel;
+            DataContext = settingsViewModel
+        };
+        if (App.MainWindow != null)
+        {
+            settingsWindow.ShowDialog(App.MainWindow);
         }
         else
         {
-            var settingsWindow = new SettingsWindow { DataContext = settingsViewModel };
-            if (App.MainWindow != null)
-                settingsWindow.ShowDialog(App.MainWindow);
-            else
-                settingsWindow.Show();
+            settingsWindow.Show();
         }
     }
 

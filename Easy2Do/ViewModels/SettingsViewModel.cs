@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Avalonia.Controls;
-using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
 
 namespace Easy2Do.ViewModels;
@@ -24,17 +23,6 @@ public partial class SettingsViewModel : ViewModelBase
         _restoreBackupCommand = new AsyncRelayCommand(RestoreBackup);
     }
 
-    private static TopLevel? GetTopLevel()
-    {
-        if (App.MainWindow != null)
-            return TopLevel.GetTopLevel(App.MainWindow);
-
-        if (Avalonia.Application.Current?.ApplicationLifetime is ISingleViewApplicationLifetime svl)
-            return TopLevel.GetTopLevel(svl.MainView);
-
-        return null;
-    }
-
     [RelayCommand]
     private void ShowAbout()
     {
@@ -50,20 +38,23 @@ public partial class SettingsViewModel : ViewModelBase
     [RelayCommand]
     private async Task BrowseStorageLocation()
     {
-        var topLevel = GetTopLevel();
-        if (topLevel != null)
+        if (App.MainWindow != null)
         {
-            var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+            var topLevel = TopLevel.GetTopLevel(App.MainWindow);
+            if (topLevel != null)
             {
-                Title = "Select Storage Location",
-                AllowMultiple = false
-            });
+                var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+                {
+                    Title = "Select Storage Location",
+                    AllowMultiple = false
+                });
 
-            if (folders.Count > 0)
-            {
-                var selectedPath = folders[0].Path.LocalPath;
-                StorageLocation = selectedPath;
-                App.SettingsService.SetStorageLocation(selectedPath);
+                if (folders.Count > 0)
+                {
+                    var selectedPath = folders[0].Path.LocalPath;
+                    StorageLocation = selectedPath;
+                    App.SettingsService.SetStorageLocation(selectedPath);
+                }
             }
         }
     }
@@ -71,8 +62,6 @@ public partial class SettingsViewModel : ViewModelBase
     [RelayCommand]
     private void OpenStorageFolder()
     {
-        if (OperatingSystem.IsIOS() || OperatingSystem.IsAndroid()) return;
-
         var location = App.SettingsService.GetStorageLocation();
         if (Directory.Exists(location))
         {
@@ -106,45 +95,53 @@ public partial class SettingsViewModel : ViewModelBase
     private async Task RestoreBackup()
     {
         System.Diagnostics.Debug.WriteLine("RestoreBackup method called");
-        var topLevel = GetTopLevel();
-        if (topLevel != null)
+        if (App.MainWindow != null)
         {
-            System.Diagnostics.Debug.WriteLine("Opening file picker for backup file...");
-            var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            var topLevel = Avalonia.Controls.TopLevel.GetTopLevel(App.MainWindow);
+            if (topLevel != null)
             {
-                Title = "Select Backup File",
-                AllowMultiple = false,
-                FileTypeFilter = new[]
+                System.Diagnostics.Debug.WriteLine("Opening file picker for backup file...");
+                var files = await topLevel.StorageProvider.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
                 {
-                    new FilePickerFileType("Backup Files")
+                    Title = "Select Backup File",
+                    AllowMultiple = false,
+                    FileTypeFilter = new[]
                     {
-                        Patterns = new[] { "*.bak", "*.json" }
+                        new Avalonia.Platform.Storage.FilePickerFileType("Backup Files")
+                        {
+                            Patterns = new[] { "*.bak", "*.json" }
+                        }
+                    }
+                });
+                System.Diagnostics.Debug.WriteLine($"File picker returned {files.Count} files.");
+                if (files.Count > 0)
+                {
+                    var selectedPath = files[0].Path.LocalPath;
+                    System.Diagnostics.Debug.WriteLine($"Selected backup file: {selectedPath}");
+                    await App.BackupService.RestoreBackupAsync(selectedPath);
+                    System.Diagnostics.Debug.WriteLine("Called RestoreBackupAsync on BackupService.");
+                    // Reload notes in main view
+                    if (App.MainWindow?.DataContext is Easy2Do.ViewModels.MainViewModel mainVm)
+                    {
+                        System.Diagnostics.Debug.WriteLine("Reloading notes in MainViewModel...");
+                        await mainVm.LoadNotesAsync();
+                        System.Diagnostics.Debug.WriteLine("Notes reloaded.");
                     }
                 }
-            });
-            System.Diagnostics.Debug.WriteLine($"File picker returned {files.Count} files.");
-            if (files.Count > 0)
-            {
-                var selectedPath = files[0].Path.LocalPath;
-                System.Diagnostics.Debug.WriteLine($"Selected backup file: {selectedPath}");
-                await App.BackupService.RestoreBackupAsync(selectedPath);
-                System.Diagnostics.Debug.WriteLine("Called RestoreBackupAsync on BackupService.");
-                // Reload notes in main view
-                if (App.MainViewModel is { } mainVm)
+                else
                 {
-                    System.Diagnostics.Debug.WriteLine("Reloading notes in MainViewModel...");
-                    await mainVm.LoadNotesAsync();
-                    System.Diagnostics.Debug.WriteLine("Notes reloaded.");
+                    System.Diagnostics.Debug.WriteLine("No backup file selected.");
                 }
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine("No backup file selected.");
+                System.Diagnostics.Debug.WriteLine("TopLevel is null.");
             }
         }
         else
         {
-            System.Diagnostics.Debug.WriteLine("TopLevel is null.");
+            System.Diagnostics.Debug.WriteLine("App.MainWindow is null.");
         }
     }
 }
+

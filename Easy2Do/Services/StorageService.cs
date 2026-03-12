@@ -47,8 +47,11 @@ public class StorageService : IDisposable
     /// </summary>
     public event Action<Guid>? NoteFileCreated;
 
-    // Use the source-generated context so serialization is AOT-safe (required for iOS).
-    private static readonly JsonSerializerOptions JsonOptions = AppJsonContext.Default.Options;
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        WriteIndented = true
+    };
 
     public StorageService(SettingsService settingsService)
     {
