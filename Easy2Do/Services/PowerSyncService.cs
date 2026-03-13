@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Easy2Do.Models;
@@ -12,6 +12,7 @@ namespace Easy2Do.Services;
 /// <summary>
 /// Lightweight sync bootstrap service.
 /// Periodically pulls from Supabase and replaces local notes.
+/// Uses JsonNode for all JSON parsing — fully AOT-safe for iOS.
 /// </summary>
 public sealed class PowerSyncService
 {
@@ -117,63 +118,69 @@ public sealed class PowerSyncService
             if (!await _refreshGate.WaitAsync(0))
                 return;
 
-            var notes = await GetSupabaseAsync<List<NoteDto>>(supabaseUrl, supabaseKey, "notes?select=*");
-            var items = await GetSupabaseAsync<List<ItemDto>>(supabaseUrl, supabaseKey, "note_items?select=*&order=position.asc");
-            var order = await GetSupabaseAsync<List<OrderDto>>(supabaseUrl, supabaseKey, "note_order?select=note_id,sort_order&order=sort_order.asc");
-            Console.WriteLine($"[Sync] Pulled {notes.Count} notes, {items.Count} items, {order.Count} order rows.");
+            var notesJson  = await GetSupabaseRawAsync(supabaseUrl, supabaseKey, "notes?select=*");
+            var itemsJson  = await GetSupabaseRawAsync(supabaseUrl, supabaseKey, "note_items?select=*&order=position.asc");
+            var orderJson  = await GetSupabaseRawAsync(supabaseUrl, supabaseKey, "note_order?select=note_id,sort_order&order=sort_order.asc");
+
+            var notesArray  = JsonNode.Parse(notesJson)  as JsonArray ?? new JsonArray();
+            var itemsArray  = JsonNode.Parse(itemsJson)  as JsonArray ?? new JsonArray();
+            var orderArray  = JsonNode.Parse(orderJson)  as JsonArray ?? new JsonArray();
+
+            Console.WriteLine($"[Sync] Pulled {notesArray.Count} notes, {itemsArray.Count} items, {orderArray.Count} order rows.");
 
             var notesById = new Dictionary<Guid, Note>();
-            foreach (var noteDto in notes)
+            foreach (var noteNode in notesArray)
             {
-                if (noteDto.Id == Guid.Empty)
-                    continue;
+                if (noteNode is not JsonObject obj) continue;
+                if (!TryGetGuid(obj, "id", out var id) || id == Guid.Empty) continue;
+
                 var note = new Note
                 {
-                    Id = noteDto.Id,
-                    Title = noteDto.Title ?? "New Note",
-                    Color = noteDto.Color ?? "#FFFFE680",
-                    CreatedDate = ParseDate(noteDto.CreatedDate) ?? DateTime.Now,
-                    ModifiedDate = ParseDate(noteDto.ModifiedDate) ?? DateTime.Now,
-                    WindowX = noteDto.WindowX,
-                    WindowY = noteDto.WindowY,
-                    WindowWidth = noteDto.WindowWidth,
-                    WindowHeight = noteDto.WindowHeight,
-                    IsPinned = noteDto.IsPinned
+                    Id            = id,
+                    Title         = obj["title"]?.GetValue<string>() ?? "New Note",
+                    Color         = obj["color"]?.GetValue<string>()  ?? "#FFFFE680",
+                    CreatedDate   = ParseDate(obj["created_date"]?.GetValue<string>()) ?? DateTime.Now,
+                    ModifiedDate  = ParseDate(obj["modified_date"]?.GetValue<string>()) ?? DateTime.Now,
+                    WindowX       = obj["window_x"]?.GetValue<double>() ?? double.NaN,
+                    WindowY       = obj["window_y"]?.GetValue<double>() ?? double.NaN,
+                    WindowWidth   = obj["window_width"]?.GetValue<double>()  ?? double.NaN,
+                    WindowHeight  = obj["window_height"]?.GetValue<double>() ?? double.NaN,
+                    IsPinned      = obj["is_pinned"]?.GetValue<bool>()  ?? false
                 };
                 notesById[note.Id] = note;
             }
 
-            foreach (var itemDto in items)
+            foreach (var itemNode in itemsArray)
             {
-                if (itemDto.Id == Guid.Empty || itemDto.NoteId == Guid.Empty)
-                    continue;
-                if (!notesById.TryGetValue(itemDto.NoteId, out var note))
-                    continue;
+                if (itemNode is not JsonObject obj) continue;
+                if (!TryGetGuid(obj, "id",      out var itemId)   || itemId  == Guid.Empty) continue;
+                if (!TryGetGuid(obj, "note_id", out var noteId)   || noteId  == Guid.Empty) continue;
+                if (!notesById.TryGetValue(noteId, out var note)) continue;
 
                 var item = new TodoItem
                 {
-                    Id = itemDto.Id,
-                    Text = itemDto.Text ?? string.Empty,
-                    IsCompleted = itemDto.IsCompleted,
-                    IsHeading = itemDto.IsHeading,
-                    IsImportant = itemDto.IsImportant,
-                    TextAttachment = itemDto.TextAttachment ?? string.Empty,
-                    DueDate = ParseDate(itemDto.DueDate),
-                    IsAlarmDismissed = itemDto.IsAlarmDismissed,
-                    SnoozeUntil = ParseDate(itemDto.SnoozeUntil),
-                    CreatedAtUtc = ParseDate(itemDto.CreatedAtUtc) ?? DateTime.UtcNow,
-                    UpdatedAtUtc = ParseDate(itemDto.UpdatedAtUtc) ?? DateTime.UtcNow,
-                    DeletedAtUtc = ParseDate(itemDto.DeletedAtUtc)
+                    Id               = itemId,
+                    Text             = obj["text"]?.GetValue<string>()          ?? string.Empty,
+                    IsCompleted      = obj["is_completed"]?.GetValue<bool>()    ?? false,
+                    IsHeading        = obj["is_heading"]?.GetValue<bool>()      ?? false,
+                    IsImportant      = obj["is_important"]?.GetValue<bool>()    ?? false,
+                    TextAttachment   = obj["text_attachment"]?.GetValue<string>() ?? string.Empty,
+                    DueDate          = ParseDate(obj["due_date"]?.GetValue<string>()),
+                    IsAlarmDismissed = obj["is_alarm_dismissed"]?.GetValue<bool>() ?? false,
+                    SnoozeUntil      = ParseDate(obj["snooze_until"]?.GetValue<string>()),
+                    CreatedAtUtc     = ParseDate(obj["created_at_utc"]?.GetValue<string>()) ?? DateTime.UtcNow,
+                    UpdatedAtUtc     = ParseDate(obj["updated_at_utc"]?.GetValue<string>()) ?? DateTime.UtcNow,
+                    DeletedAtUtc     = ParseDate(obj["deleted_at_utc"]?.GetValue<string>())
                 };
                 note.Items.Add(item);
             }
 
             var orderedIds = new List<Guid>();
-            foreach (var o in order)
+            foreach (var orderNode in orderArray)
             {
-                if (o.NoteId == Guid.Empty)
-                    continue;
-                orderedIds.Add(o.NoteId);
+                if (orderNode is not JsonObject obj) continue;
+                if (TryGetGuid(obj, "note_id", out var oid) && oid != Guid.Empty)
+                    orderedIds.Add(oid);
             }
 
             if (notesById.Count == 0)
@@ -197,15 +204,21 @@ public sealed class PowerSyncService
         }
     }
 
-    private static async Task<T> GetSupabaseAsync<T>(string supabaseUrl, string supabaseKey, string path)
+    private static async Task<string> GetSupabaseRawAsync(string supabaseUrl, string supabaseKey, string path)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, $"{supabaseUrl.TrimEnd('/')}/rest/v1/{path}");
         request.Headers.TryAddWithoutValidation("apikey", supabaseKey);
         request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {supabaseKey}");
         var response = await HttpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
-        var json = await response.Content.ReadAsStringAsync();
-        return JsonSerializer.Deserialize<T>(json) ?? throw new InvalidOperationException("Supabase JSON parse failed.");
+        return await response.Content.ReadAsStringAsync();
+    }
+
+    private static bool TryGetGuid(JsonObject obj, string key, out Guid result)
+    {
+        result = Guid.Empty;
+        var val = obj[key]?.GetValue<string>();
+        return val != null && Guid.TryParse(val, out result);
     }
 
     private static DateTime? ParseDate(string? value)
@@ -213,68 +226,6 @@ public sealed class PowerSyncService
         if (string.IsNullOrWhiteSpace(value)) return null;
         if (DateTime.TryParse(value, out var dt)) return dt;
         return null;
-    }
-
-    private sealed class NoteDto
-    {
-        [JsonPropertyName("id")]
-        public Guid Id { get; set; }
-        [JsonPropertyName("title")]
-        public string? Title { get; set; }
-        [JsonPropertyName("color")]
-        public string? Color { get; set; }
-        [JsonPropertyName("created_date")]
-        public string? CreatedDate { get; set; }
-        [JsonPropertyName("modified_date")]
-        public string? ModifiedDate { get; set; }
-        [JsonPropertyName("window_x")]
-        public double WindowX { get; set; }
-        [JsonPropertyName("window_y")]
-        public double WindowY { get; set; }
-        [JsonPropertyName("window_width")]
-        public double WindowWidth { get; set; }
-        [JsonPropertyName("window_height")]
-        public double WindowHeight { get; set; }
-        [JsonPropertyName("is_pinned")]
-        public bool IsPinned { get; set; }
-    }
-
-    private sealed class ItemDto
-    {
-        [JsonPropertyName("id")]
-        public Guid Id { get; set; }
-        [JsonPropertyName("note_id")]
-        public Guid NoteId { get; set; }
-        [JsonPropertyName("text")]
-        public string? Text { get; set; }
-        [JsonPropertyName("is_completed")]
-        public bool IsCompleted { get; set; }
-        [JsonPropertyName("is_heading")]
-        public bool IsHeading { get; set; }
-        [JsonPropertyName("is_important")]
-        public bool IsImportant { get; set; }
-        [JsonPropertyName("text_attachment")]
-        public string? TextAttachment { get; set; }
-        [JsonPropertyName("due_date")]
-        public string? DueDate { get; set; }
-        [JsonPropertyName("is_alarm_dismissed")]
-        public bool IsAlarmDismissed { get; set; }
-        [JsonPropertyName("snooze_until")]
-        public string? SnoozeUntil { get; set; }
-        [JsonPropertyName("created_at_utc")]
-        public string? CreatedAtUtc { get; set; }
-        [JsonPropertyName("updated_at_utc")]
-        public string? UpdatedAtUtc { get; set; }
-        [JsonPropertyName("deleted_at_utc")]
-        public string? DeletedAtUtc { get; set; }
-    }
-
-    private sealed class OrderDto
-    {
-        [JsonPropertyName("note_id")]
-        public Guid NoteId { get; set; }
-        [JsonPropertyName("sort_order")]
-        public int SortOrder { get; set; }
     }
 }
 

@@ -27,4 +27,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Easy2Do\Easy2Do.csproj" />
   </ItemGroup>
+
+  <!-- Stub targets so Rider's iOS/Android deployment doesn't fail with MSB4057. -->
+  <Target Name="Easy2Do_iOS" />
+  <Target Name="Easy2Do_Android" />
 </Project>

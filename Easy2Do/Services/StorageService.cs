@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Easy2Do.Models;
@@ -54,11 +55,8 @@ public class StorageService : IDisposable
     /// </summary>
     public event Action<string>? SyncStatusChanged;
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        WriteIndented = true
-    };
+    // Use the source-generated context so serialization is AOT-safe (required for iOS).
+    private static readonly JsonSerializerOptions JsonOptions = AppJsonContext.Default.Options;
 
     public StorageService(SettingsService settingsService)
     {
@@ -508,11 +506,12 @@ public class StorageService : IDisposable
         if (!IsSupabaseDevSyncEnabled()) return;
         try
         {
-            var payload = new[]
+            // Build JSON using JsonArray/JsonObject — AOT-safe, no reflection needed.
+            var payload = new JsonArray
             {
-                new Dictionary<string, object?>
+                new JsonObject
                 {
-                    ["id"] = note.Id,
+                    ["id"] = note.Id.ToString(),
                     ["title"] = note.Title ?? string.Empty,
                     ["color"] = note.Color ?? "#FFFFE680",
                     ["created_date"] = note.CreatedDate.ToString("O"),
@@ -524,7 +523,7 @@ public class StorageService : IDisposable
                     ["is_pinned"] = note.IsPinned
                 }
             };
-            await PostUpsertAsync("notes", payload);
+            await PostUpsertAsync("notes", payload.ToJsonString());
         }
         catch (Exception ex)
         {
@@ -539,30 +538,31 @@ public class StorageService : IDisposable
         if (!IsSupabaseDevSyncEnabled()) return;
         try
         {
-            var payload = new List<Dictionary<string, object?>>();
+            var payload = new JsonArray();
             for (var i = 0; i < note.Items.Count; i++)
             {
                 var item = note.Items[i];
-                payload.Add(new Dictionary<string, object?>
+                var obj = new JsonObject
                 {
-                    ["id"] = item.Id,
-                    ["note_id"] = note.Id,
+                    ["id"] = item.Id.ToString(),
+                    ["note_id"] = note.Id.ToString(),
                     ["text"] = item.Text ?? string.Empty,
                     ["is_completed"] = item.IsCompleted,
                     ["is_heading"] = item.IsHeading,
                     ["is_important"] = item.IsImportant,
                     ["text_attachment"] = item.TextAttachment ?? string.Empty,
-                    ["due_date"] = item.DueDate?.ToString("O"),
                     ["is_alarm_dismissed"] = item.IsAlarmDismissed,
-                    ["snooze_until"] = item.SnoozeUntil?.ToString("O"),
                     ["created_at_utc"] = item.CreatedAtUtc.ToString("O"),
                     ["updated_at_utc"] = item.UpdatedAtUtc.ToString("O"),
-                    ["deleted_at_utc"] = item.DeletedAtUtc?.ToString("O"),
                     ["position"] = i
-                });
+                };
+                if (item.DueDate.HasValue) obj["due_date"] = item.DueDate.Value.ToString("O");
+                if (item.SnoozeUntil.HasValue) obj["snooze_until"] = item.SnoozeUntil.Value.ToString("O");
+                if (item.DeletedAtUtc.HasValue) obj["deleted_at_utc"] = item.DeletedAtUtc.Value.ToString("O");
+                payload.Add(obj);
             }
             if (payload.Count > 0)
-                await PostUpsertAsync("note_items", payload);
+                await PostUpsertAsync("note_items", payload.ToJsonString());
         }
         catch (Exception ex)
         {
@@ -602,11 +602,10 @@ public class StorageService : IDisposable
         }
     }
 
-    private async Task PostUpsertAsync(string table, object payload)
+    private async Task PostUpsertAsync(string table, string json)
     {
         var supabaseUrl = _settingsService.GetSupabaseUrl().TrimEnd('/');
         var supabaseKey = _settingsService.GetSupabaseApiKey();
-        var json = JsonSerializer.Serialize(payload);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
         var req = new HttpRequestMessage(HttpMethod.Post, $"{supabaseUrl}/rest/v1/{table}");
         req.Headers.TryAddWithoutValidation("apikey", supabaseKey);

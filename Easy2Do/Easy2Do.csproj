@@ -22,7 +22,10 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" />
-    <PackageReference Include="Microsoft.Data.Sqlite" />
-    <PackageReference Include="PowerSync.Common" />
   </ItemGroup>
+
+  <!-- Stub targets so Rider's iOS/Android deployment doesn't fail with MSB4057
+       when it calls platform targets on all projects in the solution. -->
+  <Target Name="Easy2Do_iOS" />
+  <Target Name="Easy2Do_Android" />
 </Project>

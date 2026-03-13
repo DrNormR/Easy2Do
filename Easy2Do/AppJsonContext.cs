@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Text.Json.Serialization;
 using Easy2Do.Models;
+using Easy2Do.Services;
 
 namespace Easy2Do;
 
@@ -16,6 +17,7 @@ namespace Easy2Do;
 [JsonSerializable(typeof(List<Guid>))]
 [JsonSerializable(typeof(TodoItem))]
 [JsonSerializable(typeof(ObservableCollection<TodoItem>))]
+[JsonSerializable(typeof(AppSettings))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNameCaseInsensitive = true,

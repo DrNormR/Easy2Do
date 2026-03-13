@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using Easy2Do;
 
 namespace Easy2Do.Services;
 
@@ -31,7 +32,7 @@ public class SettingsService
             if (File.Exists(_settingsFilePath))
             {
                 var json = File.ReadAllText(_settingsFilePath);
-                var settings = JsonSerializer.Deserialize<AppSettings>(json);
+                var settings = JsonSerializer.Deserialize(json, AppJsonContext.Default.AppSettings);
                 if (settings != null)
                 {
                     ApplyDefaultUrlsIfMissing(settings);
@@ -51,8 +52,7 @@ public class SettingsService
     {
         try
         {
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            var json = JsonSerializer.Serialize(_settings, options);
+            var json = JsonSerializer.Serialize(_settings, AppJsonContext.Default.AppSettings);
             File.WriteAllText(_settingsFilePath, json);
         }
         catch (Exception ex)
