@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build Easy2Do.iOS/Easy2Do.iOS.csproj -f net8.0-ios17.0)",
+      "Bash(/usr/local/share/dotnet/dotnet build Easy2Do.iOS/Easy2Do.iOS.csproj -f net8.0-ios17.0)",
+      "Bash(/usr/local/share/dotnet/dotnet build Easy2Do.sln /t:Rebuild /p:Configuration=Debug /p:Platform=iPhone --no-restore)",
+      "Bash(/usr/local/share/dotnet/dotnet build Easy2Do.sln /t:Rebuild /p:Configuration=Debug /p:Platform=\"Any CPU\" --no-restore)",
+      "Bash(/usr/local/share/dotnet/dotnet build Easy2Do.sln /t:\"Easy2Do_iOS:Rebuild\" /p:Configuration=Debug /p:Platform=\"Any CPU\" --no-restore)",
+      "Bash(/usr/local/share/dotnet/dotnet workload list)",
+      "Bash(xcodebuild -version)",
+      "Bash(xcrun --sdk iphonesimulator --show-sdk-version)",
+      "Bash(/usr/local/share/dotnet/dotnet build Easy2Do.iOS/Easy2Do.iOS.csproj -f net9.0-ios18.0)",
+      "Bash(dotnet build Easy2Do/Easy2Do.csproj)",
+      "Bash(/usr/local/share/dotnet/dotnet build:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(dotnet build:*)"
+    ]
+  }
+}

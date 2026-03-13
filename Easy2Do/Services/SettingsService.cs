@@ -44,9 +44,7 @@ public class SettingsService
             Console.WriteLine($"Error loading settings: {ex.Message}");
         }
 
-        var defaults = GetDefaultSettings();
-        ApplyDefaultUrlsIfMissing(defaults);
-        return defaults;
+        return GetDefaultSettings();
     }
 
     private void SaveSettings()
@@ -66,10 +64,9 @@ public class SettingsService
     private AppSettings GetDefaultSettings()
     {
         var documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        return new AppSettings
+        var defaults = new AppSettings
         {
             StorageLocation = Path.Combine(documentsPath, "Easy2Do"),
-            DeviceId = Guid.NewGuid().ToString("N"),
             SyncEnabled = false,
             PowerSyncUrl = "https://sync.normnet.cc",
             PowerSyncDevToken = string.Empty,
@@ -77,6 +74,7 @@ public class SettingsService
             SupabaseUrl = "https://sitbwplgthilakgspfab.supabase.co",
             SupabaseApiKey = string.Empty
         };
+        return defaults;
     }
 
     private void ApplyDefaultUrlsIfMissing(AppSettings settings)
@@ -87,15 +85,12 @@ public class SettingsService
             settings.PowerSyncUrl = "https://sync.normnet.cc";
             updated = true;
         }
-
         if (string.IsNullOrWhiteSpace(settings.SupabaseUrl))
         {
             settings.SupabaseUrl = "https://sitbwplgthilakgspfab.supabase.co";
             updated = true;
         }
-
-        if (updated)
-            SaveSettings();
+        if (updated) SaveSettings();
     }
 
     public string GetStorageLocation()
@@ -112,92 +107,28 @@ public class SettingsService
         }
     }
 
-    public string GetDeviceId()
-    {
-        if (string.IsNullOrWhiteSpace(_settings.DeviceId))
-        {
-            _settings.DeviceId = Guid.NewGuid().ToString("N");
-            SaveSettings();
-        }
-        return _settings.DeviceId;
-    }
+    public bool GetSyncEnabled() => _settings.SyncEnabled;
+    public void SetSyncEnabled(bool enabled) { _settings.SyncEnabled = enabled; SaveSettings(); }
 
-    public string GetDeviceName()
-    {
-        return Environment.MachineName;
-    }
+    public string GetPowerSyncUrl() => _settings.PowerSyncUrl;
+    public void SetPowerSyncUrl(string url) { _settings.PowerSyncUrl = url?.Trim() ?? string.Empty; SaveSettings(); }
 
-    public bool GetSyncEnabled()
-    {
-        return _settings.SyncEnabled;
-    }
+    public string GetPowerSyncDevToken() => _settings.PowerSyncDevToken;
+    public void SetPowerSyncDevToken(string token) { _settings.PowerSyncDevToken = token?.Trim() ?? string.Empty; SaveSettings(); }
 
-    public void SetSyncEnabled(bool enabled)
-    {
-        _settings.SyncEnabled = enabled;
-        SaveSettings();
-    }
+    public string GetSyncBackendUrl() => _settings.SyncBackendUrl;
+    public void SetSyncBackendUrl(string url) { _settings.SyncBackendUrl = url?.Trim() ?? string.Empty; SaveSettings(); }
 
-    public string GetPowerSyncUrl()
-    {
-        return _settings.PowerSyncUrl;
-    }
+    public string GetSupabaseUrl() => _settings.SupabaseUrl;
+    public void SetSupabaseUrl(string url) { _settings.SupabaseUrl = url?.Trim() ?? string.Empty; SaveSettings(); }
 
-    public void SetPowerSyncUrl(string url)
-    {
-        _settings.PowerSyncUrl = url?.Trim() ?? string.Empty;
-        SaveSettings();
-    }
-
-    public string GetPowerSyncDevToken()
-    {
-        return _settings.PowerSyncDevToken;
-    }
-
-    public void SetPowerSyncDevToken(string token)
-    {
-        _settings.PowerSyncDevToken = token?.Trim() ?? string.Empty;
-        SaveSettings();
-    }
-
-    public string GetSyncBackendUrl()
-    {
-        return _settings.SyncBackendUrl;
-    }
-
-    public void SetSyncBackendUrl(string url)
-    {
-        _settings.SyncBackendUrl = url?.Trim() ?? string.Empty;
-        SaveSettings();
-    }
-
-    public string GetSupabaseUrl()
-    {
-        return _settings.SupabaseUrl;
-    }
-
-    public void SetSupabaseUrl(string url)
-    {
-        _settings.SupabaseUrl = url?.Trim() ?? string.Empty;
-        SaveSettings();
-    }
-
-    public string GetSupabaseApiKey()
-    {
-        return _settings.SupabaseApiKey;
-    }
-
-    public void SetSupabaseApiKey(string key)
-    {
-        _settings.SupabaseApiKey = key?.Trim() ?? string.Empty;
-        SaveSettings();
-    }
+    public string GetSupabaseApiKey() => _settings.SupabaseApiKey;
+    public void SetSupabaseApiKey(string key) { _settings.SupabaseApiKey = key?.Trim() ?? string.Empty; SaveSettings(); }
 }
 
 public class AppSettings
 {
     public string StorageLocation { get; set; } = string.Empty;
-    public string DeviceId { get; set; } = string.Empty;
     public bool SyncEnabled { get; set; }
     public string PowerSyncUrl { get; set; } = string.Empty;
     public string PowerSyncDevToken { get; set; } = string.Empty;

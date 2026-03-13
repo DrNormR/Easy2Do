@@ -11,8 +11,7 @@ namespace Easy2Do.Services;
 
 /// <summary>
 /// Lightweight sync bootstrap service.
-/// Keeps app startup and settings flows working even when full PowerSync
-/// connector pieces are not present in this project yet.
+/// Periodically pulls from Supabase and replaces local notes.
 /// </summary>
 public sealed class PowerSyncService
 {
@@ -52,7 +51,7 @@ public sealed class PowerSyncService
 
             var dbPath = _storageService.GetDatabasePath();
             if (string.IsNullOrWhiteSpace(dbPath))
-                return Task.FromResult(PowerSyncStartResult.Failed("Database path is unavailable."));
+                return Task.FromResult(PowerSyncStartResult.Failed("Storage path is unavailable."));
 
             lock (_stateLock)
             {
@@ -68,11 +67,20 @@ public sealed class PowerSyncService
             }
 
             _ = RefreshFromSupabaseAsync();
-            return Task.FromResult(PowerSyncStartResult.Success($"Sync bootstrap ready for '{powerSyncUrl}' using '{dbPath}'."));
+            return Task.FromResult(PowerSyncStartResult.Success($"Sync bootstrap ready for '{powerSyncUrl}'."));
         }
         catch (Exception ex)
         {
             return Task.FromResult(PowerSyncStartResult.Failed($"Sync start failed: {ex.Message}"));
+        }
+    }
+
+    public void Stop()
+    {
+        lock (_stateLock)
+        {
+            _refreshCts?.Cancel();
+            _started = false;
         }
     }
 

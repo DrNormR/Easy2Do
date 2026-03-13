@@ -1,66 +1,78 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:vm="using:Easy2Do.ViewModels"
-        xmlns:views="using:Easy2Do.Views"
-        mc:Ignorable="d" d:DesignWidth="550" d:DesignHeight="800"
-        x:Class="Easy2Do.Views.SettingsWindow"
-        x:DataType="vm:SettingsViewModel"
-        Title="Settings"
-        Width="550" Height="800"
-        WindowStartupLocation="CenterOwner"
-        CanResize="True">
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:Easy2Do.ViewModels"
+             xmlns:views="using:Easy2Do.Views"
+             mc:Ignorable="d" d:DesignWidth="550" d:DesignHeight="600"
+             x:Class="Easy2Do.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+
+  <Design.DataContext>
+    <vm:SettingsViewModel />
+  </Design.DataContext>
 
   <ScrollViewer Margin="20">
     <StackPanel Spacing="15">
-      <TextBlock Text="Settings" 
-                 FontSize="24" 
+
+      <!-- Back button - only visible on mobile -->
+      <Button Content="&#x2190; Back"
+              IsVisible="{OnPlatform Default=False, iOS=True, Android=True}"
+              Click="OnBackButtonClick"
+              HorizontalAlignment="Left"
+              Padding="12,8"
+              Background="#FF888888"
+              Foreground="White"
+              CornerRadius="5"/>
+
+      <TextBlock Text="Settings"
+                 FontSize="24"
                  FontWeight="Bold"
                  Margin="0,0,0,10"/>
 
       <!-- Storage Location Section -->
-      <Border BorderBrush="#FFCCCCCC" 
-              BorderThickness="1" 
+      <Border BorderBrush="#FFCCCCCC"
+              BorderThickness="1"
               CornerRadius="5"
               Padding="15"
               Background="#FFF9F9F9">
         <StackPanel Spacing="10">
-          <TextBlock Text="Storage Location" 
-                     FontSize="16" 
+          <TextBlock Text="Storage Location"
+                     FontSize="16"
                      FontWeight="SemiBold"/>
-          
+
           <TextBlock Text="Choose where your notes will be saved:"
                      FontSize="12"
                      Foreground="#FF666666"
                      TextWrapping="Wrap"/>
-          
-          <Border BorderBrush="#FFAAAAAA" 
-                  BorderThickness="1" 
+
+          <Border BorderBrush="#FFAAAAAA"
+                  BorderThickness="1"
                   CornerRadius="3"
                   Padding="8"
                   Background="White">
-            <TextBlock Text="{Binding StorageLocation}" 
+            <TextBlock Text="{Binding StorageLocation}"
                        FontSize="12"
                        TextWrapping="Wrap"
                        Foreground="#FF333333"/>
           </Border>
-          
+
           <StackPanel Orientation="Horizontal" Spacing="10">
-            <Button Content="Browse..." 
+            <Button Content="Browse..."
                     Command="{Binding BrowseStorageLocationCommand}"
                     Padding="15,8"
                     Background="#FF4CAF50"
                     Foreground="White"
                     CornerRadius="5"/>
-            
-            <Button Content="Open Folder" 
+
+            <Button Content="Open Folder"
                     Command="{Binding OpenStorageFolderCommand}"
+                    IsVisible="{OnPlatform Default=True, iOS=False, Android=False}"
                     Padding="15,8"
                     Background="#FFFF9800"
                     Foreground="White"
                     CornerRadius="5"/>
-            
+
             <Button Content="Restore Backup"
                     Command="{Binding RestoreBackupCommand}"
                     IsEnabled="True"
@@ -69,7 +81,7 @@
                     Foreground="White"
                     CornerRadius="5"/>
           </StackPanel>
-          
+
           <TextBlock Text="Note: Changing the storage location will not move existing notes."
                      FontSize="11"
                      Foreground="#FFFF6600"
@@ -153,7 +165,7 @@
                   Background="#FF2196F3"
                   Foreground="White"
                   CornerRadius="5"/>
-          
+
           <TextBlock Text="View information about this application"
                      FontSize="12"
                      Foreground="#FF666666"/>
@@ -162,8 +174,8 @@
 
       <!-- About Section (shown when About is clicked) -->
       <Border IsVisible="{Binding IsAboutVisible}"
-              BorderBrush="#FF2196F3" 
-              BorderThickness="2" 
+              BorderBrush="#FF2196F3"
+              BorderThickness="2"
               CornerRadius="5"
               Padding="20"
               Background="White">
@@ -171,4 +183,4 @@
       </Border>
     </StackPanel>
   </ScrollViewer>
-</Window>
+</UserControl>

@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -47,6 +49,11 @@ public class StorageService : IDisposable
     /// </summary>
     public event Action<Guid>? NoteFileCreated;
 
+    /// <summary>
+    /// Fired with a human-readable status message when a sync operation completes.
+    /// </summary>
+    public event Action<string>? SyncStatusChanged;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -57,6 +64,12 @@ public class StorageService : IDisposable
     {
         _settingsService = settingsService;
         _backupService = new BackupService(settingsService);
+    }
+
+    /// <summary>Returns the notes directory path (used by PowerSyncService as a proxy for DB path).</summary>
+    public string GetDatabasePath()
+    {
+        return GetNotesDirectory();
     }
 
     private string GetNotesDirectory()
@@ -477,6 +490,148 @@ public class StorageService : IDisposable
     }
 
     private readonly record struct FileState(DateTime LastWriteTimeUtc, long Length);
+
+    // ── Supabase direct-upload helpers ──────────────────────────────────────
+
+    private static readonly HttpClient SupabaseHttpClient = new();
+
+    private bool IsSupabaseDevSyncEnabled()
+    {
+        if (!_settingsService.GetSyncEnabled()) return false;
+        var url = _settingsService.GetSupabaseUrl();
+        var key = _settingsService.GetSupabaseApiKey();
+        return !string.IsNullOrWhiteSpace(url) && !string.IsNullOrWhiteSpace(key);
+    }
+
+    public async Task TryUpsertNoteToSupabaseAsync(Note note)
+    {
+        if (!IsSupabaseDevSyncEnabled()) return;
+        try
+        {
+            var payload = new[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["id"] = note.Id,
+                    ["title"] = note.Title ?? string.Empty,
+                    ["color"] = note.Color ?? "#FFFFE680",
+                    ["created_date"] = note.CreatedDate.ToString("O"),
+                    ["modified_date"] = note.ModifiedDate.ToString("O"),
+                    ["window_x"] = double.IsNaN(note.WindowX) ? 0 : note.WindowX,
+                    ["window_y"] = double.IsNaN(note.WindowY) ? 0 : note.WindowY,
+                    ["window_width"] = double.IsNaN(note.WindowWidth) ? 320 : note.WindowWidth,
+                    ["window_height"] = double.IsNaN(note.WindowHeight) ? 420 : note.WindowHeight,
+                    ["is_pinned"] = note.IsPinned
+                }
+            };
+            await PostUpsertAsync("notes", payload);
+        }
+        catch (Exception ex)
+        {
+            var msg = $"Supabase note upsert failed: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"[Supabase] {msg}");
+            SyncStatusChanged?.Invoke(msg);
+        }
+    }
+
+    public async Task TryUpsertNoteItemsToSupabaseAsync(Note note)
+    {
+        if (!IsSupabaseDevSyncEnabled()) return;
+        try
+        {
+            var payload = new List<Dictionary<string, object?>>();
+            for (var i = 0; i < note.Items.Count; i++)
+            {
+                var item = note.Items[i];
+                payload.Add(new Dictionary<string, object?>
+                {
+                    ["id"] = item.Id,
+                    ["note_id"] = note.Id,
+                    ["text"] = item.Text ?? string.Empty,
+                    ["is_completed"] = item.IsCompleted,
+                    ["is_heading"] = item.IsHeading,
+                    ["is_important"] = item.IsImportant,
+                    ["text_attachment"] = item.TextAttachment ?? string.Empty,
+                    ["due_date"] = item.DueDate?.ToString("O"),
+                    ["is_alarm_dismissed"] = item.IsAlarmDismissed,
+                    ["snooze_until"] = item.SnoozeUntil?.ToString("O"),
+                    ["created_at_utc"] = item.CreatedAtUtc.ToString("O"),
+                    ["updated_at_utc"] = item.UpdatedAtUtc.ToString("O"),
+                    ["deleted_at_utc"] = item.DeletedAtUtc?.ToString("O"),
+                    ["position"] = i
+                });
+            }
+            if (payload.Count > 0)
+                await PostUpsertAsync("note_items", payload);
+        }
+        catch (Exception ex)
+        {
+            var msg = $"Supabase item upsert failed: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"[Supabase] {msg}");
+            SyncStatusChanged?.Invoke(msg);
+        }
+    }
+
+    public async Task TryDeleteNoteFromSupabaseAsync(Guid noteId)
+    {
+        if (!IsSupabaseDevSyncEnabled()) return;
+        try
+        {
+            var supabaseUrl = _settingsService.GetSupabaseUrl().TrimEnd('/');
+            var supabaseKey = _settingsService.GetSupabaseApiKey();
+
+            var req = new HttpRequestMessage(HttpMethod.Delete, $"{supabaseUrl}/rest/v1/note_items?note_id=eq.{noteId}");
+            req.Headers.TryAddWithoutValidation("apikey", supabaseKey);
+            req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {supabaseKey}");
+            req.Headers.TryAddWithoutValidation("Prefer", "return=minimal");
+            await SupabaseHttpClient.SendAsync(req);
+
+            var req2 = new HttpRequestMessage(HttpMethod.Delete, $"{supabaseUrl}/rest/v1/notes?id=eq.{noteId}");
+            req2.Headers.TryAddWithoutValidation("apikey", supabaseKey);
+            req2.Headers.TryAddWithoutValidation("Authorization", $"Bearer {supabaseKey}");
+            req2.Headers.TryAddWithoutValidation("Prefer", "return=minimal");
+            await SupabaseHttpClient.SendAsync(req2);
+
+            SyncStatusChanged?.Invoke($"Supabase delete OK (note {noteId}).");
+        }
+        catch (Exception ex)
+        {
+            var msg = $"Supabase delete failed: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"[Supabase] {msg}");
+            SyncStatusChanged?.Invoke(msg);
+        }
+    }
+
+    private async Task PostUpsertAsync(string table, object payload)
+    {
+        var supabaseUrl = _settingsService.GetSupabaseUrl().TrimEnd('/');
+        var supabaseKey = _settingsService.GetSupabaseApiKey();
+        var json = JsonSerializer.Serialize(payload);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        var req = new HttpRequestMessage(HttpMethod.Post, $"{supabaseUrl}/rest/v1/{table}");
+        req.Headers.TryAddWithoutValidation("apikey", supabaseKey);
+        req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {supabaseKey}");
+        req.Headers.TryAddWithoutValidation("Prefer", "resolution=merge-duplicates,return=minimal");
+        req.Content = content;
+        var resp = await SupabaseHttpClient.SendAsync(req);
+        resp.EnsureSuccessStatusCode();
+        SyncStatusChanged?.Invoke($"Supabase upsert OK ({table}).");
+    }
+
+    /// <summary>
+    /// Replaces all local notes with the given list (used by PowerSyncService on remote pull).
+    /// Saves each note to disk and updates the manifest.
+    /// </summary>
+    public async Task ReplaceAllNotesAsync(IReadOnlyList<Note> notes, IReadOnlyList<Guid> orderedIds)
+    {
+        foreach (var note in notes)
+        {
+            await SaveNoteAsync(note);
+        }
+        var ids = orderedIds.Count > 0 ? new List<Guid>(orderedIds) : notes.Select(n => n.Id).ToList();
+        await SaveManifestAsync(ids);
+        SyncStatusChanged?.Invoke($"Replaced local storage with {notes.Count} remote notes.");
+    }
 
     public void Dispose()
     {

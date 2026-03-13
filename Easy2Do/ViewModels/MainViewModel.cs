@@ -28,6 +28,22 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private Note? _selectedNote;
 
+    [ObservableProperty]
+    private ViewModelBase? _activeDetailViewModel;
+
+    public bool HasActiveDetail => ActiveDetailViewModel != null;
+
+    partial void OnActiveDetailViewModelChanged(ViewModelBase? value)
+    {
+        OnPropertyChanged(nameof(HasActiveDetail));
+    }
+
+    [RelayCommand]
+    private void CloseDetail()
+    {
+        ActiveDetailViewModel = null;
+    }
+
     private bool _isLoading;
     private readonly Dictionary<Guid, CancellationTokenSource> _saveCtsMap = new();
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(500);
@@ -157,6 +173,9 @@ public partial class MainViewModel : ViewModelBase
             await Task.Delay(DebounceDelay, token);
             await App.StorageService.SaveNoteAsync(note);
             await SaveManifestAsync();
+            // Upload to Supabase if sync is enabled
+            _ = App.StorageService.TryUpsertNoteToSupabaseAsync(note);
+            _ = App.StorageService.TryUpsertNoteItemsToSupabaseAsync(note);
         }
         catch (TaskCanceledException) { }
         catch (InvalidOperationException ex)
@@ -305,6 +324,7 @@ public partial class MainViewModel : ViewModelBase
             Notes.Remove(note);
             await App.StorageService.DeleteNoteFileAsync(note.Id);
             await SaveManifestAsync();
+            _ = App.StorageService.TryDeleteNoteFromSupabaseAsync(note.Id);
         }
     }
 
@@ -344,11 +364,15 @@ public partial class MainViewModel : ViewModelBase
         if (note != null)
         {
             var noteViewModel = new NoteViewModel(note);
-            var noteWindow = new NoteWindow
+            if (OperatingSystem.IsIOS() || OperatingSystem.IsAndroid())
             {
-                DataContext = noteViewModel
-            };
-            noteWindow.Show();
+                ActiveDetailViewModel = noteViewModel;
+            }
+            else
+            {
+                var noteWindow = new NoteWindow { DataContext = noteViewModel };
+                noteWindow.Show();
+            }
         }
     }
 
@@ -356,17 +380,17 @@ public partial class MainViewModel : ViewModelBase
     private void OpenSettings()
     {
         var settingsViewModel = new SettingsViewModel();
-        var settingsWindow = new SettingsWindow
+        if (OperatingSystem.IsIOS() || OperatingSystem.IsAndroid())
         {
-            DataContext = settingsViewModel
-        };
-        if (App.MainWindow != null)
-        {
-            settingsWindow.ShowDialog(App.MainWindow);
+            ActiveDetailViewModel = settingsViewModel;
         }
         else
         {
-            settingsWindow.Show();
+            var settingsWindow = new SettingsWindow { DataContext = settingsViewModel };
+            if (App.MainWindow != null)
+                settingsWindow.ShowDialog(App.MainWindow);
+            else
+                settingsWindow.Show();
         }
     }
 
