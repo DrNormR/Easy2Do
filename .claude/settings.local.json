@@ -29,7 +29,8 @@
       "Bash(find /usr/local/share/dotnet/packs -name Xamarin.Shared.Sdk.targets -path *net9.0_18.4*)",
       "Bash(find /usr/local/share/dotnet/packs/Microsoft.iOS.Sdk.net9.0_18.4/ -name *.dll)",
       "Bash(find /usr/local/share/dotnet/packs/Microsoft.iOS.Sdk.net9.0_18.4/18.4.9289/tools -name *.dll)",
-      "Bash(find /usr/local/share/dotnet -name Microsoft.iOS.Sdk.props -path *18.4*)"
+      "Bash(find /usr/local/share/dotnet -name Microsoft.iOS.Sdk.props -path *18.4*)",
+      "Bash(dotnet msbuild:*)"
     ]
   }
 }

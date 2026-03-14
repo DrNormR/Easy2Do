@@ -132,7 +132,16 @@ public sealed class PowerSyncService
             foreach (var noteNode in notesArray)
             {
                 if (noteNode is not JsonObject obj) continue;
-                if (!TryGetGuid(obj, "id", out var id) || id == Guid.Empty) continue;
+                if (!TryGetGuid(obj, "id", out var id))
+                {
+                    Console.WriteLine($"[Sync] Skipping note — missing/unparseable id: raw={obj["id"]}");
+                    continue;
+                }
+                if (notesById.ContainsKey(id))
+                {
+                    Console.WriteLine($"[Sync] Duplicate note id={id}, skipping.");
+                    continue;
+                }
 
                 var note = new Note
                 {
@@ -154,7 +163,7 @@ public sealed class PowerSyncService
             {
                 if (itemNode is not JsonObject obj) continue;
                 if (!TryGetGuid(obj, "id",      out var itemId)   || itemId  == Guid.Empty) continue;
-                if (!TryGetGuid(obj, "note_id", out var noteId)   || noteId  == Guid.Empty) continue;
+                if (!TryGetGuid(obj, "note_id", out var noteId)) continue;
                 if (!notesById.TryGetValue(noteId, out var note)) continue;
 
                 var item = new TodoItem
@@ -179,7 +188,7 @@ public sealed class PowerSyncService
             foreach (var orderNode in orderArray)
             {
                 if (orderNode is not JsonObject obj) continue;
-                if (TryGetGuid(obj, "note_id", out var oid) && oid != Guid.Empty)
+                if (TryGetGuid(obj, "note_id", out var oid))
                     orderedIds.Add(oid);
             }
 
@@ -217,7 +226,13 @@ public sealed class PowerSyncService
     private static bool TryGetGuid(JsonObject obj, string key, out Guid result)
     {
         result = Guid.Empty;
-        var val = obj[key]?.GetValue<string>();
+        var node = obj[key];
+        if (node == null) return false;
+        // GetValue<string>() fails if the JSON node is not a string token (e.g. a UUID
+        // type returned as a raw JSON value). Fall back to ToString() in that case.
+        string? val;
+        try { val = node.GetValue<string>(); }
+        catch { val = node.ToString(); }
         return val != null && Guid.TryParse(val, out result);
     }
 

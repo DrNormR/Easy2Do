@@ -69,6 +69,16 @@ public partial class App : Application
             {
                 DataContext = MainViewModel
             };
+
+            // Start sync if enabled
+            _ = PowerSyncService.StartAsync();
+
+            // Wire up DataRefreshed to reload notes
+            PowerSyncService.DataRefreshed += () => Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
+            {
+                if (MainViewModel != null)
+                    await MainViewModel.LoadNotesAsync();
+            });
         }
 
         base.OnFrameworkInitializationCompleted();

@@ -3,31 +3,73 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Easy2Do.Models;
 
-public partial class TodoItem : ObservableObject
+// Properties are explicit (not [ObservableProperty]) so that the System.Text.Json
+// source generator can see them at compile time. [ObservableProperty]-generated
+// properties are invisible to other source generators, causing {} on iOS AOT.
+public class TodoItem : ObservableObject
 {
-    [ObservableProperty]
     private Guid _id = Guid.NewGuid();
+    public Guid Id
+    {
+        get => _id;
+        set => SetProperty(ref _id, value);
+    }
 
-    [ObservableProperty]
     private DateTime _createdAtUtc = DateTime.UtcNow;
+    public DateTime CreatedAtUtc
+    {
+        get => _createdAtUtc;
+        set => SetProperty(ref _createdAtUtc, value);
+    }
 
-    [ObservableProperty]
     private DateTime _updatedAtUtc = DateTime.UtcNow;
+    public DateTime UpdatedAtUtc
+    {
+        get => _updatedAtUtc;
+        set => SetProperty(ref _updatedAtUtc, value);
+    }
 
-    [ObservableProperty]
     private DateTime? _deletedAtUtc;
+    public DateTime? DeletedAtUtc
+    {
+        get => _deletedAtUtc;
+        set => SetProperty(ref _deletedAtUtc, value);
+    }
 
-    [ObservableProperty]
     private string _text = string.Empty;
+    public string Text
+    {
+        get => _text;
+        set
+        {
+            if (SetProperty(ref _text, value))
+                Touch();
+        }
+    }
 
-    [ObservableProperty]
     private bool _isCompleted;
+    public bool IsCompleted
+    {
+        get => _isCompleted;
+        set
+        {
+            if (SetProperty(ref _isCompleted, value))
+                Touch();
+        }
+    }
 
-    [ObservableProperty]
     private bool _isHeading;
+    public bool IsHeading
+    {
+        get => _isHeading;
+        set
+        {
+            if (SetProperty(ref _isHeading, value))
+                Touch();
+        }
+    }
 
     private bool _isImportant;
-
     public bool IsImportant
     {
         get => _isImportant;
@@ -39,7 +81,6 @@ public partial class TodoItem : ObservableObject
     }
 
     private string _textAttachment = string.Empty;
-
     public string TextAttachment
     {
         get => _textAttachment;
@@ -56,7 +97,6 @@ public partial class TodoItem : ObservableObject
     public bool HasTextAttachment => !string.IsNullOrEmpty(_textAttachment);
 
     private DateTime? _dueDate;
-
     public DateTime? DueDate
     {
         get => _dueDate;
@@ -73,7 +113,6 @@ public partial class TodoItem : ObservableObject
     public bool HasDueDate => _dueDate.HasValue;
 
     private bool _isAlarmDismissed;
-
     public bool IsAlarmDismissed
     {
         get => _isAlarmDismissed;
@@ -85,7 +124,6 @@ public partial class TodoItem : ObservableObject
     }
 
     private DateTime? _snoozeUntil;
-
     public DateTime? SnoozeUntil
     {
         get => _snoozeUntil;
@@ -95,12 +133,6 @@ public partial class TodoItem : ObservableObject
                 Touch();
         }
     }
-
-    partial void OnTextChanged(string value) => Touch();
-
-    partial void OnIsCompletedChanged(bool value) => Touch();
-
-    partial void OnIsHeadingChanged(bool value) => Touch();
 
     private void Touch()
     {

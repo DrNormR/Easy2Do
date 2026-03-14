@@ -10,7 +10,14 @@
     <vm:MainViewModel />
   </Design.DataContext>
 
-  <Grid RowDefinitions="Auto,*" Margin="12">
+  <Panel>
+  <!-- Detail overlay (NoteView / SettingsView on mobile) -->
+  <ContentControl Content="{Binding ActiveDetailViewModel}"
+                  IsVisible="{Binding HasActiveDetail}"/>
+
+  <!-- Main list — hidden while a detail is showing -->
+  <Grid RowDefinitions="Auto,*" Margin="12"
+        IsVisible="{Binding !HasActiveDetail}">
     <!-- Toolbar -->
     <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
       <Button Content="+ New Note" 
@@ -104,4 +111,5 @@
       </ScrollViewer>
     </Border>
   </Grid>
+  </Panel>
 </UserControl>

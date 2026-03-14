@@ -190,16 +190,16 @@ public class StorageService : IDisposable
                 return null;
             }
             var json = await File.ReadAllTextAsync(path);
-            System.Diagnostics.Debug.WriteLine($"LoadNoteAsync: file content length {json.Length} for note {id}");
+            Console.WriteLine($"[Load] note {id}: len={json.Length}, preview={json.Substring(0, Math.Min(120, json.Length))}");
             try
             {
                 var note = JsonSerializer.Deserialize<Note>(json, JsonOptions);
                 if (note == null)
-                    System.Diagnostics.Debug.WriteLine($"LoadNoteAsync: failed to deserialize note {id}");
+                    Console.WriteLine($"[Load] FAILED to deserialize note {id}");
                 else
                 {
                     note.LastWriteTimeUtc = File.GetLastWriteTimeUtc(path);
-                    System.Diagnostics.Debug.WriteLine($"LoadNoteAsync: deserialized note {id} - {note.Title}");
+                    Console.WriteLine($"[Load] note {id}: title='{note.Title}' items={note.Items?.Count}");
                 }
                 return note;
             }
@@ -237,6 +237,7 @@ public class StorageService : IDisposable
                 note.ModifiedDate = DateTime.UtcNow;
                 _isSelfWriting = true;
                 var json = JsonSerializer.Serialize(note, JsonOptions);
+                Console.WriteLine($"[Save] note {note.Id}: title='{note.Title}' items={note.Items?.Count} json_len={json.Length} preview={json.Substring(0, Math.Min(120, json.Length))}");
                 await File.WriteAllTextAsync(path, json);
                 await _backupService.BackupNoteAsync(note.Id, json);
                 note.LastWriteTimeUtc = File.GetLastWriteTimeUtc(path);
@@ -287,7 +288,11 @@ public class StorageService : IDisposable
                 Directory.CreateDirectory(storageLocation);
 
             _isSelfWriting = true;
-            var json = JsonSerializer.Serialize(noteIds, JsonOptions);
+            // Must use the concrete List<Guid> typed accessor — IList<Guid> is not
+            // registered in AppJsonContext and fails on iOS AOT.
+            var json = JsonSerializer.Serialize(
+                noteIds as List<Guid> ?? noteIds.ToList(),
+                AppJsonContext.Default.ListGuid);
             await File.WriteAllTextAsync(GetManifestPath(), json);
         }
         catch (Exception ex)

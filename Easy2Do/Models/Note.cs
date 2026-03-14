@@ -5,25 +5,52 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Easy2Do.Models;
 
-public partial class Note : ObservableObject
+// Properties are explicit (not [ObservableProperty]) so that the System.Text.Json
+// source generator can see them at compile time. [ObservableProperty]-generated
+// properties are invisible to other source generators, causing {} on iOS AOT.
+public class Note : ObservableObject
 {
-    [ObservableProperty]
     private Guid _id = Guid.NewGuid();
+    public Guid Id
+    {
+        get => _id;
+        set => SetProperty(ref _id, value);
+    }
 
-    [ObservableProperty]
     private string _title = "New Note";
+    public string Title
+    {
+        get => _title;
+        set => SetProperty(ref _title, value);
+    }
 
-    [ObservableProperty]
     private string _color = "#FFFFE680"; // Yellow
+    public string Color
+    {
+        get => _color;
+        set => SetProperty(ref _color, value);
+    }
 
-    [ObservableProperty]
     private ObservableCollection<TodoItem> _items = new();
+    public ObservableCollection<TodoItem> Items
+    {
+        get => _items;
+        set => SetProperty(ref _items, value);
+    }
 
-    [ObservableProperty]
     private DateTime _createdDate = DateTime.Now;
+    public DateTime CreatedDate
+    {
+        get => _createdDate;
+        set => SetProperty(ref _createdDate, value);
+    }
 
-    [ObservableProperty]
     private DateTime _modifiedDate = DateTime.Now;
+    public DateTime ModifiedDate
+    {
+        get => _modifiedDate;
+        set => SetProperty(ref _modifiedDate, value);
+    }
 
     [JsonIgnore]
     public DateTime? LastWriteTimeUtc { get; set; }
@@ -31,23 +58,42 @@ public partial class Note : ObservableObject
     [JsonIgnore]
     public bool NeedsItemMigration { get; set; }
 
-    [ObservableProperty]
     private double _windowX = double.NaN;
+    public double WindowX
+    {
+        get => _windowX;
+        set => SetProperty(ref _windowX, value);
+    }
 
-    [ObservableProperty]
     private double _windowY = double.NaN;
+    public double WindowY
+    {
+        get => _windowY;
+        set => SetProperty(ref _windowY, value);
+    }
 
-    [ObservableProperty]
     private double _windowWidth = double.NaN;
+    public double WindowWidth
+    {
+        get => _windowWidth;
+        set => SetProperty(ref _windowWidth, value);
+    }
 
-    [ObservableProperty]
     private double _windowHeight = double.NaN;
+    public double WindowHeight
+    {
+        get => _windowHeight;
+        set => SetProperty(ref _windowHeight, value);
+    }
 
-    [ObservableProperty]
     private bool _isPinned;
+    public bool IsPinned
+    {
+        get => _isPinned;
+        set => SetProperty(ref _isPinned, value);
+    }
 
     private bool _isReloading;
-
     [JsonIgnore]
     public bool IsReloading
     {
