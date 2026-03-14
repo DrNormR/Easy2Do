@@ -76,7 +76,7 @@
                  x:Name="TitleTextBox"
                  Classes="inline-editor"
                  Text="{Binding Note.Title, UpdateSourceTrigger=PropertyChanged}"
-                 FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
+                 FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
                  FontSize="16"
                  FontWeight="Normal"
                  Foreground="#FF222222"
@@ -88,7 +88,7 @@
         <!-- Pin Button -->
         <Button Grid.Column="1"
                 Command="{Binding TogglePinCommand}"
-                FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
+                FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
                 FontSize="14"
                 Padding="4"
                 Background="Transparent"
@@ -113,7 +113,7 @@
         <!-- Color Picker Menu -->
         <DropDownButton Grid.Column="3"
                         Content="&#x1F3A8;"
-                        FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
+                        FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
                         FontSize="14"
                         Padding="4"
                         Background="Transparent"
@@ -277,7 +277,7 @@
                       Grid.Column="1"
                       Width="20"
                       Content="&#x1F6A8;"
-                      FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
+                      FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
                       HorizontalAlignment="Left"
                       Background="Transparent"
                       BorderThickness="0"
@@ -328,7 +328,7 @@
                          Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"
                          Padding="0"
                          MinHeight="0"
-                         FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
+                         FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
                          GotFocus="OnItemTextBoxGotFocus"
                          KeyDown="OnItemTextBoxKeyDown"/>
 
@@ -341,7 +341,7 @@
                          FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"
                          Padding="0"
                          MinHeight="0"
-                         FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
+                         FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
                          GotFocus="OnItemTextBoxGotFocus"
                          KeyDown="OnItemTextBoxKeyDown">
                   <TextBox.Margin>
@@ -369,7 +369,7 @@
                            Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"
                            Padding="0"
                            MinHeight="0"
-                           FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
+                           FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
                            GotFocus="OnItemTextBoxGotFocus"
                            KeyDown="OnItemTextBoxKeyDown">
                     <TextBox.IsVisible>
@@ -389,7 +389,7 @@
                              FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"
                              Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"
                              Padding="0"
-                             FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
+                             FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
                              Foreground="Transparent"
                              IsHitTestVisible="False">
                     <TextBlock.IsVisible>
@@ -416,7 +416,7 @@
                       Grid.Column="4"
                       Width="18"
                       Content="&#x1F4CE;"
-                      FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
+                      FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
                       Background="Transparent"
                       BorderThickness="0"
                       FontSize="13"
@@ -443,7 +443,7 @@
                       Grid.Column="5"
                       Width="18"
                       Content="&#x1F4C5;"
-                      FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
+                      FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
                       Background="Transparent"
                       BorderThickness="0"
                       FontSize="13"

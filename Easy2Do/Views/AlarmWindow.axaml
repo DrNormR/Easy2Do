@@ -14,7 +14,7 @@
                Text="&#x23F0; Due Now!"
                FontSize="18"
                FontWeight="Bold"
-               FontFamily="Noto Color Emoji, Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, sans-serif"
+               FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
                Foreground="#D32F2F"
                Margin="0,0,0,4"/>
     <TextBlock Grid.Row="1" x:Name="NoteTitle" FontSize="11" Foreground="#888888" Margin="0,0,0,6"/>
