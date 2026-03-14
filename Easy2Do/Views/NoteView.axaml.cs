@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -308,5 +309,155 @@ public partial class NoteView : UserControl
                 border.IsVisible = false;
             }
         }
+    }
+
+    private void OnItemRowPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (!OperatingSystem.IsIOS() && !OperatingSystem.IsAndroid()) return;
+        if (sender is not Grid grid || grid.DataContext is not TodoItem item) return;
+        if (DataContext is not NoteViewModel vm) return;
+
+        // Walk visual tree from the tapped element up to the row grid.
+        // If we pass through a CheckBox or TextBox, let the element handle it instead.
+        var source = e.Source as Control;
+        while (source != null && !ReferenceEquals(source, grid))
+        {
+            if (source is CheckBox || source is TextBox)
+                return;
+            source = source.GetVisualParent() as Control;
+        }
+
+        e.Handled = true;
+        ShowItemOptionsFlyout(grid, item, vm);
+    }
+
+    private void ShowItemOptionsFlyout(Control anchor, TodoItem item, NoteViewModel vm)
+    {
+        var flyout = new MenuFlyout();
+
+        // Important toggle
+        var importantItem = new MenuItem
+        {
+            Header = item.IsImportant ? "Remove Important" : "Mark Important"
+        };
+        importantItem.Click += (_, _) =>
+        {
+            item.IsImportant = !item.IsImportant;
+            vm.Note.ModifiedDate = DateTime.Now;
+        };
+        flyout.Items.Add(importantItem);
+
+        // Move Up / Move Down
+        var items = vm.Note.Items;
+        var idx = items.IndexOf(item);
+        var moveUpItem = new MenuItem { Header = "Move Up", IsEnabled = idx > 0 };
+        moveUpItem.Click += (_, _) =>
+        {
+            var i = items.IndexOf(item);
+            if (i > 0) { items.Move(i, i - 1); vm.Note.ModifiedDate = DateTime.Now; }
+        };
+        flyout.Items.Add(moveUpItem);
+
+        var moveDownItem = new MenuItem { Header = "Move Down", IsEnabled = idx < items.Count - 1 };
+        moveDownItem.Click += (_, _) =>
+        {
+            var i = items.IndexOf(item);
+            if (i < items.Count - 1) { items.Move(i, i + 1); vm.Note.ModifiedDate = DateTime.Now; }
+        };
+        flyout.Items.Add(moveDownItem);
+
+        flyout.Items.Add(new Separator());
+
+        var attachItem = new MenuItem { Header = item.HasTextAttachment ? "Edit Attachment..." : "Set Attachment..." };
+        attachItem.Click += (_, _) => ShowAttachmentFlyout(anchor, item, vm);
+        flyout.Items.Add(attachItem);
+
+        var dueDateItem = new MenuItem { Header = item.HasDueDate ? "Change Due Date..." : "Set Due Date..." };
+        dueDateItem.Click += (_, _) => ShowDueDateFlyout(anchor, item, vm);
+        flyout.Items.Add(dueDateItem);
+
+        flyout.Items.Add(new Separator());
+
+        var deleteItem = new MenuItem { Header = "Delete" };
+        deleteItem.Click += (_, _) => vm.RemoveItemCommand.Execute(item);
+        flyout.Items.Add(deleteItem);
+
+        flyout.ShowAt(anchor);
+    }
+
+    private void ShowAttachmentFlyout(Control anchor, TodoItem item, NoteViewModel vm)
+    {
+        var textBox = new TextBox
+        {
+            Text = item.TextAttachment,
+            Watermark = "Enter attachment text...",
+            Width = 260,
+            AcceptsReturn = true,
+            MaxHeight = 120,
+            Margin = new Avalonia.Thickness(0, 0, 0, 8)
+        };
+
+        var saveButton = new Button
+        {
+            Content = "Save",
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right
+        };
+
+        var panel = new StackPanel { Spacing = 4, Margin = new Avalonia.Thickness(8) };
+        panel.Children.Add(textBox);
+        panel.Children.Add(saveButton);
+
+        var flyout = new Flyout { Content = panel };
+
+        saveButton.Click += (_, _) =>
+        {
+            item.TextAttachment = textBox.Text ?? string.Empty;
+            vm.Note.ModifiedDate = DateTime.Now;
+            flyout.Hide();
+        };
+
+        flyout.ShowAt(anchor);
+        Dispatcher.UIThread.Post(() => textBox.Focus());
+    }
+
+    private void ShowDueDateFlyout(Control anchor, TodoItem item, NoteViewModel vm)
+    {
+        var picker = new CalendarDatePicker
+        {
+            SelectedDate = item.DueDate,
+            Width = 260
+        };
+
+        var clearButton = new Button
+        {
+            Content = "Clear Due Date",
+            Margin = new Avalonia.Thickness(0, 4, 0, 0),
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch
+        };
+
+        var panel = new StackPanel { Spacing = 4, Margin = new Avalonia.Thickness(8) };
+        panel.Children.Add(picker);
+        panel.Children.Add(clearButton);
+
+        var flyout = new Flyout { Content = panel };
+
+        picker.SelectedDateChanged += (_, _) =>
+        {
+            if (picker.SelectedDate.HasValue)
+            {
+                item.DueDate = picker.SelectedDate.Value;
+                vm.Note.ModifiedDate = DateTime.Now;
+                flyout.Hide();
+            }
+        };
+
+        clearButton.Click += (_, _) =>
+        {
+            item.DueDate = null;
+            vm.Note.ModifiedDate = DateTime.Now;
+            flyout.Hide();
+        };
+
+        flyout.ShowAt(anchor);
     }
 }

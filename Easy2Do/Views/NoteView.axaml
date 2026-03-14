@@ -226,15 +226,17 @@
     <!-- Items List -->
     <ScrollViewer Grid.Row="2" Margin="4,0,4,6" Focusable="True" PointerPressed="OnBackgroundPointerPressed"
                   HorizontalScrollBarVisibility="Disabled">
-      <ItemsControl x:Name="ItemsControl" ItemsSource="{Binding Note.Items}" x:CompileBindings="False" DragDrop.AllowDrop="True">
+      <ItemsControl x:Name="ItemsControl" ItemsSource="{Binding Note.Items}" x:CompileBindings="False"
+                    DragDrop.AllowDrop="{OnPlatform Default=True, iOS=False, Android=False}">
         <ItemsControl.ItemTemplate>
           <DataTemplate>
             <Grid x:Name="ItemRow" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="1" Margin="2,0,0,0" MinHeight="6"
-                  DragDrop.AllowDrop="True"
+                  DragDrop.AllowDrop="{OnPlatform Default=True, iOS=False, Android=False}"
                   DragDrop.DragEnter="OnItemRowDragEnter"
                   DragDrop.DragOver="OnItemRowDragOver"
                   DragDrop.DragLeave="OnItemRowDragLeave"
                   DragDrop.Drop="OnItemRowDrop"
+                  PointerReleased="OnItemRowPointerReleased"
                   Background="{Binding IsImportant, Converter={StaticResource ImportantRowBrush}}">
               <Border x:Name="DropIndicatorBefore"
                       Grid.ColumnSpan="7"
@@ -488,6 +490,8 @@
                   </MultiBinding>
                 </Button.IsHitTestVisible>
               </Button>
+
+              <!-- Column 7 reserved for mobile tap area (no visible indicator needed) -->
             </Grid>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
