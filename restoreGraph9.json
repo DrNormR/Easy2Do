@@ -1,0 +1,262 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\Users\\normanr\\Easy2Do\\Easy2Do\\Easy2Do.Android\\Easy2Do.Android.csproj": {},
+    "C:\\Users\\normanr\\Easy2Do\\Easy2Do\\Easy2Do\\Easy2Do.csproj": {}
+  },
+  "projects": {
+    "C:\\Users\\normanr\\Easy2Do\\Easy2Do\\Easy2Do.Android\\Easy2Do.Android.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\normanr\\Easy2Do\\Easy2Do\\Easy2Do.Android\\Easy2Do.Android.csproj",
+        "projectName": "Easy2Do.Android",
+        "projectPath": "C:\\Users\\normanr\\Easy2Do\\Easy2Do\\Easy2Do.Android\\Easy2Do.Android.csproj",
+        "packagesPath": "C:\\Users\\normanr\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\normanr\\Easy2Do\\Easy2Do\\Easy2Do.Android\\obj\\",
+        "projectStyle": "PackageReference",
+        "centralPackageVersionsManagementEnabled": true,
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\normanr\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0-android34.0"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\Program Files\\dotnet\\library-packs": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0-android34.0": {
+            "targetAlias": "net8.0-android34.0",
+            "projectReferences": {
+              "C:\\Users\\normanr\\Easy2Do\\Easy2Do\\Easy2Do\\Easy2Do.csproj": {
+                "projectPath": "C:\\Users\\normanr\\Easy2Do\\Easy2Do\\Easy2Do\\Easy2Do.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "9.0.300"
+      },
+      "frameworks": {
+        "net8.0-android34.0": {
+          "targetAlias": "net8.0-android34.0",
+          "dependencies": {
+            "Avalonia.Android": {
+              "target": "Package",
+              "version": "[11.3.11, )",
+              "versionCentrallyManaged": true
+            },
+            "Microsoft.NET.ILLink.Tasks": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[8.0.21, )",
+              "autoReferenced": true
+            },
+            "Xamarin.AndroidX.Core.SplashScreen": {
+              "target": "Package",
+              "version": "[1.0.1.15, )",
+              "versionCentrallyManaged": true
+            }
+          },
+          "centralPackageVersions": {
+            "Avalonia": "11.3.11",
+            "Avalonia.Android": "11.3.11",
+            "Avalonia.Browser": "11.3.11",
+            "Avalonia.Controls.ColorPicker": "11.3.11",
+            "Avalonia.Desktop": "11.3.11",
+            "Avalonia.Diagnostics": "11.3.11",
+            "Avalonia.Fonts.Inter": "11.3.11",
+            "Avalonia.iOS": "11.3.11",
+            "Avalonia.Themes.Fluent": "11.3.11",
+            "CommunityToolkit.Mvvm": "8.4.0",
+            "Xamarin.AndroidX.Core.SplashScreen": "1.0.1.15"
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "downloadDependencies": [
+            {
+              "name": "Microsoft.Android.Ref.34",
+              "version": "[34.0.154, 34.0.154]"
+            },
+            {
+              "name": "Microsoft.Android.Runtime.34.android-arm",
+              "version": "[34.0.154, 34.0.154]"
+            },
+            {
+              "name": "Microsoft.Android.Runtime.34.android-arm64",
+              "version": "[34.0.154, 34.0.154]"
+            },
+            {
+              "name": "Microsoft.Android.Runtime.34.android-x64",
+              "version": "[34.0.154, 34.0.154]"
+            },
+            {
+              "name": "Microsoft.Android.Runtime.34.android-x86",
+              "version": "[34.0.154, 34.0.154]"
+            }
+          ],
+          "frameworkReferences": {
+            "Microsoft.Android": {
+              "privateAssets": "all"
+            },
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.306/PortableRuntimeIdentifierGraph.json"
+        }
+      },
+      "runtimes": {
+        "android-arm": {
+          "#import": []
+        },
+        "android-arm64": {
+          "#import": []
+        },
+        "android-x64": {
+          "#import": []
+        },
+        "android-x86": {
+          "#import": []
+        }
+      }
+    },
+    "C:\\Users\\normanr\\Easy2Do\\Easy2Do\\Easy2Do\\Easy2Do.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\normanr\\Easy2Do\\Easy2Do\\Easy2Do\\Easy2Do.csproj",
+        "projectName": "Easy2Do",
+        "projectPath": "C:\\Users\\normanr\\Easy2Do\\Easy2Do\\Easy2Do\\Easy2Do.csproj",
+        "packagesPath": "C:\\Users\\normanr\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\normanr\\Easy2Do\\Easy2Do\\Easy2Do\\obj\\",
+        "projectStyle": "PackageReference",
+        "centralPackageVersionsManagementEnabled": true,
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\normanr\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\Program Files\\dotnet\\library-packs": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "9.0.300"
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "dependencies": {
+            "Avalonia": {
+              "target": "Package",
+              "version": "[11.3.11, )",
+              "versionCentrallyManaged": true
+            },
+            "Avalonia.Controls.ColorPicker": {
+              "target": "Package",
+              "version": "[11.3.11, )",
+              "versionCentrallyManaged": true
+            },
+            "Avalonia.Diagnostics": {
+              "target": "Package",
+              "version": "[11.3.11, )",
+              "versionCentrallyManaged": true
+            },
+            "Avalonia.Fonts.Inter": {
+              "target": "Package",
+              "version": "[11.3.11, )",
+              "versionCentrallyManaged": true
+            },
+            "Avalonia.Themes.Fluent": {
+              "target": "Package",
+              "version": "[11.3.11, )",
+              "versionCentrallyManaged": true
+            },
+            "CommunityToolkit.Mvvm": {
+              "target": "Package",
+              "version": "[8.4.0, )",
+              "versionCentrallyManaged": true
+            }
+          },
+          "centralPackageVersions": {
+            "Avalonia": "11.3.11",
+            "Avalonia.Android": "11.3.11",
+            "Avalonia.Browser": "11.3.11",
+            "Avalonia.Controls.ColorPicker": "11.3.11",
+            "Avalonia.Desktop": "11.3.11",
+            "Avalonia.Diagnostics": "11.3.11",
+            "Avalonia.Fonts.Inter": "11.3.11",
+            "Avalonia.iOS": "11.3.11",
+            "Avalonia.Themes.Fluent": "11.3.11",
+            "CommunityToolkit.Mvvm": "8.4.0",
+            "Xamarin.AndroidX.Core.SplashScreen": "1.0.1.15"
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.306/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}
