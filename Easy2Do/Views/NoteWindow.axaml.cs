@@ -23,20 +23,6 @@ public partial class NoteWindow : Window
         InitializeComponent();
         Opened += OnWindowOpened;
         Closing += OnWindowClosing;
-        // Subscribe to external note file changes
-        Easy2Do.App.StorageService.NoteFileChanged += OnExternalNoteChanged;
-    }
-
-    // Automatic refresh on external note file change
-    private void OnExternalNoteChanged(Guid id)
-    {
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (_noteId.HasValue && _noteId.Value == id && DataContext is NoteViewModel vm)
-            {
-                vm.RefreshNoteCommand.Execute(null);
-            }
-        });
     }
 
     private void OnWindowOpened(object? sender, EventArgs e)

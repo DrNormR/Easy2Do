@@ -589,13 +589,15 @@ public class StorageService : IDisposable
             req.Headers.TryAddWithoutValidation("apikey", supabaseKey);
             req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {supabaseKey}");
             req.Headers.TryAddWithoutValidation("Prefer", "return=minimal");
-            await SupabaseHttpClient.SendAsync(req);
+            var resp = await SupabaseHttpClient.SendAsync(req);
+            resp.EnsureSuccessStatusCode();
 
             var req2 = new HttpRequestMessage(HttpMethod.Delete, $"{supabaseUrl}/rest/v1/notes?id=eq.{noteId}");
             req2.Headers.TryAddWithoutValidation("apikey", supabaseKey);
             req2.Headers.TryAddWithoutValidation("Authorization", $"Bearer {supabaseKey}");
             req2.Headers.TryAddWithoutValidation("Prefer", "return=minimal");
-            await SupabaseHttpClient.SendAsync(req2);
+            var resp2 = await SupabaseHttpClient.SendAsync(req2);
+            resp2.EnsureSuccessStatusCode();
 
             SyncStatusChanged?.Invoke($"Supabase delete OK (note {noteId}).");
         }
@@ -604,6 +606,63 @@ public class StorageService : IDisposable
             var msg = $"Supabase delete failed: {ex.Message}";
             System.Diagnostics.Debug.WriteLine($"[Supabase] {msg}");
             SyncStatusChanged?.Invoke(msg);
+        }
+    }
+
+    public async Task TryDeleteNoteItemFromSupabaseAsync(Guid itemId)
+    {
+        if (!IsSupabaseDevSyncEnabled()) return;
+        try
+        {
+            var supabaseUrl = _settingsService.GetSupabaseUrl().TrimEnd('/');
+            var supabaseKey = _settingsService.GetSupabaseApiKey();
+
+            var req = new HttpRequestMessage(HttpMethod.Delete, $"{supabaseUrl}/rest/v1/note_items?id=eq.{itemId}");
+            req.Headers.TryAddWithoutValidation("apikey", supabaseKey);
+            req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {supabaseKey}");
+            req.Headers.TryAddWithoutValidation("Prefer", "return=representation");
+            var resp = await SupabaseHttpClient.SendAsync(req);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadAsStringAsync();
+                throw new InvalidOperationException($"HTTP {(int)resp.StatusCode} deleting item {itemId}: {body}");
+            }
+
+            var deletedBody = await resp.Content.ReadAsStringAsync();
+            if (!deletedBody.Contains(itemId.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                // Hard delete did not affect a row (often RLS). Fall back to soft delete.
+                var patchReq = new HttpRequestMessage(new HttpMethod("PATCH"), $"{supabaseUrl}/rest/v1/note_items?id=eq.{itemId}");
+                patchReq.Headers.TryAddWithoutValidation("apikey", supabaseKey);
+                patchReq.Headers.TryAddWithoutValidation("Authorization", $"Bearer {supabaseKey}");
+                patchReq.Headers.TryAddWithoutValidation("Prefer", "return=representation");
+
+                var patchObj = new JsonObject
+                {
+                    ["deleted_at_utc"] = DateTime.UtcNow.ToString("O")
+                };
+                patchReq.Content = new StringContent(patchObj.ToJsonString(), Encoding.UTF8, "application/json");
+
+                var patchResp = await SupabaseHttpClient.SendAsync(patchReq);
+                if (!patchResp.IsSuccessStatusCode)
+                {
+                    var patchBody = await patchResp.Content.ReadAsStringAsync();
+                    throw new InvalidOperationException($"HTTP {(int)patchResp.StatusCode} soft-deleting item {itemId}: {patchBody}");
+                }
+
+                var patchedBody = await patchResp.Content.ReadAsStringAsync();
+                if (!patchedBody.Contains(itemId.ToString(), StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException($"No rows affected when deleting item {itemId}. Check Supabase RLS/policies.");
+            }
+
+            SyncStatusChanged?.Invoke($"Supabase delete OK (item {itemId}).");
+        }
+        catch (Exception ex)
+        {
+            var msg = $"Supabase item delete failed: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"[Supabase] {msg}");
+            SyncStatusChanged?.Invoke(msg);
+            throw;
         }
     }
 

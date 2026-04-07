@@ -119,7 +119,7 @@ public sealed class PowerSyncService
                 return;
 
             var notesJson  = await GetSupabaseRawAsync(supabaseUrl, supabaseKey, "notes?select=*");
-            var itemsJson  = await GetSupabaseRawAsync(supabaseUrl, supabaseKey, "note_items?select=*&order=position.asc");
+            var itemsJson  = await GetSupabaseRawAsync(supabaseUrl, supabaseKey, "note_items?select=*&deleted_at_utc=is.null&order=position.asc");
             var orderJson  = await GetSupabaseRawAsync(supabaseUrl, supabaseKey, "note_order?select=note_id,sort_order&order=sort_order.asc");
 
             var notesArray  = JsonNode.Parse(notesJson)  as JsonArray ?? new JsonArray();
@@ -165,6 +165,7 @@ public sealed class PowerSyncService
                 if (!TryGetGuid(obj, "id",      out var itemId)   || itemId  == Guid.Empty) continue;
                 if (!TryGetGuid(obj, "note_id", out var noteId)) continue;
                 if (!notesById.TryGetValue(noteId, out var note)) continue;
+                if (ParseDate(obj["deleted_at_utc"]?.GetValue<string>()).HasValue) continue;
 
                 var item = new TodoItem
                 {

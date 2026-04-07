@@ -76,10 +76,37 @@ public partial class NoteViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void RemoveItem(TodoItem item)
+    private async Task RemoveItem(TodoItem item)
     {
-        Note.Items.Remove(item);
-        Note.ModifiedDate = DateTime.Now;
+        if (item == null) return;
+
+        try
+        {
+            // Delete remotely first (with soft-delete fallback inside storage service).
+            await Easy2Do.App.StorageService.TryDeleteNoteItemFromSupabaseAsync(item.Id);
+
+            // Remote delete/tombstone succeeded; now remove locally.
+            Note.Items.Remove(item);
+            Note.ModifiedDate = DateTime.Now;
+
+            // Avoid stale-save conflicts after background sync writes.
+            if (Easy2Do.App.MainViewModel is MainViewModel mainVm)
+            {
+                mainVm.CancelPendingSave(Note.Id);
+            }
+
+            var latest = await Easy2Do.App.StorageService.LoadNoteAsync(Note.Id);
+            if (latest != null)
+            {
+                Note.LastWriteTimeUtc = latest.LastWriteTimeUtc;
+            }
+
+            await Easy2Do.App.StorageService.SaveNoteAsync(Note);
+        }
+        catch
+        {
+            // Keep local state unchanged on failure.
+        }
     }
 
     [RelayCommand]
