@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Easy2Do.Models;
 using Easy2Do.Views;
+using System.Collections.Specialized;
 
 namespace Easy2Do.ViewModels;
 
@@ -45,6 +46,7 @@ public partial class MainViewModel : ViewModelBase
     }
 
     private bool _isLoading;
+    private DateTime _lastLocalEditUtc = DateTime.MinValue;
     private readonly Dictionary<Guid, CancellationTokenSource> _saveCtsMap = new();
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(500);
 
@@ -114,6 +116,7 @@ public partial class MainViewModel : ViewModelBase
         if (sender is Note note)
         {
             if (note.IsReloading) return;
+            _lastLocalEditUtc = DateTime.UtcNow;
             note.ModifiedDate = DateTime.Now;
             RequestSaveNote(note);
         }
@@ -135,6 +138,9 @@ public partial class MainViewModel : ViewModelBase
             foreach (TodoItem item in e.OldItems)
                 item.PropertyChanged -= OnItemPropertyChanged;
 
+        if (e.Action != NotifyCollectionChangedAction.Reset)
+            _lastLocalEditUtc = DateTime.UtcNow;
+
         note.ModifiedDate = DateTime.Now;
         RequestSaveNote(note);
     }
@@ -146,6 +152,7 @@ public partial class MainViewModel : ViewModelBase
         if (note is null) return;
         if (note.IsReloading) return;
 
+        _lastLocalEditUtc = DateTime.UtcNow;
         note.ModifiedDate = DateTime.Now;
         RequestSaveNote(note);
     }
@@ -200,6 +207,10 @@ public partial class MainViewModel : ViewModelBase
 
     private void OnExternalNoteChanged(Guid id)
     {
+        // Avoid clobbering fresh local edits before debounced save/upsert finishes.
+        if ((DateTime.UtcNow - _lastLocalEditUtc) < TimeSpan.FromSeconds(2))
+            return;
+
         Dispatcher.UIThread.Post(() => _ = ReloadNoteFromDiskAsync(id));
     }
 
