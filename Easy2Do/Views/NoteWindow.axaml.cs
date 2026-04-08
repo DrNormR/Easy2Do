@@ -17,12 +17,31 @@ public partial class NoteWindow : Window
     private static readonly Dictionary<Guid, List<NoteWindow>> OpenWindows = new();
     // Note ID for this window
     private Guid? _noteId;
+    private DateTime _lastExternalRefreshUtc = DateTime.MinValue;
 
     public NoteWindow()
     {
         InitializeComponent();
         Opened += OnWindowOpened;
         Closing += OnWindowClosing;
+        // Keep open note windows updated when local files are replaced by sync pulls.
+        Easy2Do.App.StorageService.NoteFileChanged += OnExternalNoteChanged;
+    }
+
+    private void OnExternalNoteChanged(Guid id)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!_noteId.HasValue || _noteId.Value != id) return;
+            if (DataContext is not NoteViewModel vm) return;
+
+            // Throttle refresh to avoid rapid self-triggered refresh loops.
+            var now = DateTime.UtcNow;
+            if ((now - _lastExternalRefreshUtc) < TimeSpan.FromSeconds(2)) return;
+            _lastExternalRefreshUtc = now;
+
+            vm.RefreshNoteCommand.Execute(null);
+        });
     }
 
     private void OnWindowOpened(object? sender, EventArgs e)
@@ -51,6 +70,8 @@ public partial class NoteWindow : Window
 
     private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
     {
+        Easy2Do.App.StorageService.NoteFileChanged -= OnExternalNoteChanged;
+
         if (_noteId.HasValue && OpenWindows.TryGetValue(_noteId.Value, out var list))
         {
             list.Remove(this);
