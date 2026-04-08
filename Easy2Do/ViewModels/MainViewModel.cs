@@ -76,13 +76,36 @@ public partial class MainViewModel : ViewModelBase
             await App.StorageService.MigrateIfNeededAsync();
             var loadedNotes = await App.StorageService.LoadAllNotesAsync();
             System.Diagnostics.Debug.WriteLine($"LoadNotesAsync: loaded {loadedNotes.Count} notes.");
-            Notes.Clear();
+
+            var existingById = Notes.ToDictionary(n => n.Id, n => n);
+            var nextNotes = new List<Note>(loadedNotes.Count);
+            var loadedIds = new HashSet<Guid>();
+
             foreach (var note in loadedNotes)
             {
                 System.Diagnostics.Debug.WriteLine($"Loaded note: {note.Id} - {note.Title}");
-                SubscribeNote(note);
-                Notes.Add(note);
+                loadedIds.Add(note.Id);
+
+                if (existingById.TryGetValue(note.Id, out var existing))
+                {
+                    ApplyNoteSnapshot(existing, note);
+                    nextNotes.Add(existing);
+                }
+                else
+                {
+                    SubscribeNote(note);
+                    nextNotes.Add(note);
+                }
             }
+
+            foreach (var stale in Notes.Where(n => !loadedIds.Contains(n.Id)).ToList())
+            {
+                UnsubscribeNote(stale);
+            }
+
+            Notes.Clear();
+            foreach (var n in nextNotes)
+                Notes.Add(n);
         }
         finally
         {
@@ -256,27 +279,7 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             var old = Notes[index];
-            UnsubscribeNote(old);
-
-            // Copy data into the existing Note so open NoteWindows stay connected
-            old.Title = freshNote.Title;
-            old.Color = freshNote.Color;
-            old.CreatedDate = freshNote.CreatedDate;
-            old.ModifiedDate = freshNote.ModifiedDate;
-            old.LastWriteTimeUtc = freshNote.LastWriteTimeUtc;
-            old.WindowX = freshNote.WindowX;
-            old.WindowY = freshNote.WindowY;
-            old.WindowWidth = freshNote.WindowWidth;
-            old.WindowHeight = freshNote.WindowHeight;
-
-            // Replace items
-            foreach (var item in old.Items)
-                item.PropertyChanged -= OnItemPropertyChanged;
-            old.Items.Clear();
-            foreach (var item in freshNote.Items)
-                old.Items.Add(item);
-
-            SubscribeNote(old);
+            ApplyNoteSnapshot(old, freshNote);
         }
         finally
         {
@@ -301,6 +304,32 @@ public partial class MainViewModel : ViewModelBase
         lock (_saveMapLock)
         {
             return _saveCtsMap.TryGetValue(noteId, out var cts) && !cts.IsCancellationRequested;
+        }
+    }
+
+    private static void ApplyNoteSnapshot(Note target, Note source)
+    {
+        target.IsReloading = true;
+        try
+        {
+            target.Title = source.Title;
+            target.Color = source.Color;
+            target.CreatedDate = source.CreatedDate;
+            target.ModifiedDate = source.ModifiedDate;
+            target.LastWriteTimeUtc = source.LastWriteTimeUtc;
+            target.IsPinned = source.IsPinned;
+            target.WindowX = source.WindowX;
+            target.WindowY = source.WindowY;
+            target.WindowWidth = source.WindowWidth;
+            target.WindowHeight = source.WindowHeight;
+
+            target.Items.Clear();
+            foreach (var item in source.Items)
+                target.Items.Add(item);
+        }
+        finally
+        {
+            target.IsReloading = false;
         }
     }
 
