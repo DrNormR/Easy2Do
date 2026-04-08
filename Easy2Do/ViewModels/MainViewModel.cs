@@ -46,8 +46,8 @@ public partial class MainViewModel : ViewModelBase
     }
 
     private bool _isLoading;
-    private DateTime _lastLocalEditUtc = DateTime.MinValue;
     private readonly Dictionary<Guid, CancellationTokenSource> _saveCtsMap = new();
+    private readonly object _saveMapLock = new();
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(500);
 
     public MainViewModel()
@@ -116,7 +116,6 @@ public partial class MainViewModel : ViewModelBase
         if (sender is Note note)
         {
             if (note.IsReloading) return;
-            _lastLocalEditUtc = DateTime.UtcNow;
             note.ModifiedDate = DateTime.Now;
             RequestSaveNote(note);
         }
@@ -138,9 +137,6 @@ public partial class MainViewModel : ViewModelBase
             foreach (TodoItem item in e.OldItems)
                 item.PropertyChanged -= OnItemPropertyChanged;
 
-        if (e.Action != NotifyCollectionChangedAction.Reset)
-            _lastLocalEditUtc = DateTime.UtcNow;
-
         note.ModifiedDate = DateTime.Now;
         RequestSaveNote(note);
     }
@@ -152,7 +148,6 @@ public partial class MainViewModel : ViewModelBase
         if (note is null) return;
         if (note.IsReloading) return;
 
-        _lastLocalEditUtc = DateTime.UtcNow;
         note.ModifiedDate = DateTime.Now;
         RequestSaveNote(note);
     }
@@ -163,21 +158,24 @@ public partial class MainViewModel : ViewModelBase
     {
         if (_isLoading) return;
 
-        // Cancel any pending debounce for this note
-        if (_saveCtsMap.TryGetValue(note.Id, out var oldCts))
-            oldCts.Cancel();
+        CancellationTokenSource cts;
+        lock (_saveMapLock)
+        {
+            if (_saveCtsMap.TryGetValue(note.Id, out var oldCts))
+                oldCts.Cancel();
 
-        var cts = new CancellationTokenSource();
-        _saveCtsMap[note.Id] = cts;
+            cts = new CancellationTokenSource();
+            _saveCtsMap[note.Id] = cts;
+        }
 
-        _ = DebouncedSaveNoteAsync(note, cts.Token);
+        _ = DebouncedSaveNoteAsync(note, cts);
     }
 
-    private async Task DebouncedSaveNoteAsync(Note note, CancellationToken token)
+    private async Task DebouncedSaveNoteAsync(Note note, CancellationTokenSource cts)
     {
         try
         {
-            await Task.Delay(DebounceDelay, token);
+            await Task.Delay(DebounceDelay, cts.Token);
             await App.StorageService.SaveNoteAsync(note);
             await SaveManifestAsync();
             // Upload to Supabase if sync is enabled
@@ -190,6 +188,14 @@ public partial class MainViewModel : ViewModelBase
             // Version conflict detected
             await ShowConflictMessageAsync(note, ex.Message);
             await ReloadNoteFromDiskAsync(note.Id);
+        }
+        finally
+        {
+            lock (_saveMapLock)
+            {
+                if (_saveCtsMap.TryGetValue(note.Id, out var current) && ReferenceEquals(current, cts))
+                    _saveCtsMap.Remove(note.Id);
+            }
         }
     }
 
@@ -207,8 +213,8 @@ public partial class MainViewModel : ViewModelBase
 
     private void OnExternalNoteChanged(Guid id)
     {
-        // Avoid clobbering fresh local edits before debounced save/upsert finishes.
-        if ((DateTime.UtcNow - _lastLocalEditUtc) < TimeSpan.FromSeconds(2))
+        // Avoid clobbering while this exact note still has a pending local debounced save.
+        if (HasPendingSave(id))
             return;
 
         Dispatcher.UIThread.Post(() => _ = ReloadNoteFromDiskAsync(id));
@@ -280,10 +286,21 @@ public partial class MainViewModel : ViewModelBase
 
     public void CancelPendingSave(Guid noteId)
     {
-        if (_saveCtsMap.TryGetValue(noteId, out var cts))
+        lock (_saveMapLock)
         {
-            cts.Cancel();
-            _saveCtsMap.Remove(noteId);
+            if (_saveCtsMap.TryGetValue(noteId, out var cts))
+            {
+                cts.Cancel();
+                _saveCtsMap.Remove(noteId);
+            }
+        }
+    }
+
+    private bool HasPendingSave(Guid noteId)
+    {
+        lock (_saveMapLock)
+        {
+            return _saveCtsMap.TryGetValue(noteId, out var cts) && !cts.IsCancellationRequested;
         }
     }
 
