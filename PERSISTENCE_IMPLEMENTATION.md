@@ -179,6 +179,48 @@ Added new functionality:
 ### Result
 - Deletions now persist across refresh cycles and no longer respawn after sync.
 
+## New Item Retention + Delete Button Hotfix (Stage 3)
+
+### Issue
+- Newly added checklist items could disappear after refresh/reopen.
+- In some cases, clicking `X` on newly created items did not remove the row.
+
+### Root Cause
+- Refresh merge logic rebuilt item collections from incoming snapshot only, dropping local-only items that had not yet appeared remotely.
+- Delete button command resolution in row templates was brittle for dynamically created rows, and delete hit-testing depended on pointer-over state.
+
+### Fix Implemented
+- Updated `MainViewModel.ApplyItems()` to preserve existing local items not present in the incoming snapshot.
+- Updated `NoteWindow` delete button to use explicit click handling (`OnDeleteButtonClick`) instead of template command binding.
+- Removed hover-gated delete hit-testing so `X` remains actionable consistently.
+
+### Result
+- Newly created items persist through refresh cycles and note reopen.
+- Delete behavior is reliable for both existing and newly added checklist items.
+
+## Font + Emoji Rendering Hotfix (Release 2.2)
+
+### Issue
+- After iOS-focused UI changes, Windows text rendering regressed.
+- Emoji in note text entry/list item text could appear monochrome while icon emojis stayed color.
+
+### Root Cause
+- Font stacks diverged between desktop/mobile views.
+- Emoji-capable fonts were not consistently included or prioritized for editable text controls.
+
+### Fix Implemented
+- Added shared font resources in `App.axaml`:
+  - `BodyFontFamily`
+  - `EmojiFontFamily`
+- Updated note/main/alarm views to consume shared font resources for consistent cross-platform rendering.
+- Prioritized `Segoe UI Emoji` in `BodyFontFamily` fallback so text-entry emoji render in color on Windows.
+- Kept delete button behavior reliable while restoring hover-only visibility in note rows.
+
+### Result
+- Windows typography is back to expected quality.
+- Emoji render in color in both icon controls and list item text entry.
+- Delete `X` behavior remains reliable and returns to hover visibility.
+
 ## Supabase Setup Notes (Stage 3)
 
 ### Tables (Postgres)

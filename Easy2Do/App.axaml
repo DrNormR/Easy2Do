@@ -9,6 +9,11 @@
         <local:ViewLocator/>
     </Application.DataTemplates>
 
+    <Application.Resources>
+        <FontFamily x:Key="BodyFontFamily">Inter, Segoe UI Emoji, Segoe UI, Apple Color Emoji, Noto Color Emoji, SF Pro Text, Noto Sans, DejaVu Sans, sans-serif</FontFamily>
+        <FontFamily x:Key="EmojiFontFamily">Segoe UI Emoji, Apple Color Emoji, Noto Color Emoji, Segoe UI Symbol, sans-serif</FontFamily>
+    </Application.Resources>
+
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml"/>

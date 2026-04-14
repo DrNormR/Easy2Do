@@ -1,20 +1,15 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:vm="using:Easy2Do.ViewModels"
-        xmlns:conv="using:Easy2Do.Converters"
-        mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="500"
-        x:Class="Easy2Do.Views.NoteWindow"
-        x:DataType="vm:NoteViewModel"
-        Icon="/Assets/post-it-green.ico"
-        Title="{Binding Note.Title}"
-        Topmost="{Binding Note.IsPinned}"
-        Width="360" Height="450"
-        MinWidth="280" MinHeight="350"
-        Background="{Binding Note.Color}">
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:Easy2Do.ViewModels"
+             xmlns:conv="using:Easy2Do.Converters"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="500"
+             x:Class="Easy2Do.Views.NoteView"
+             x:DataType="vm:NoteViewModel"
+             Background="{Binding Note.Color}">
 
-  <Window.Resources>
+  <UserControl.Resources>
     <conv:BoolToBrushConverter x:Key="ImportantBrush" TrueBrush="#D32F2F" FalseBrush="#000000" />
     <conv:BoolToBrushConverter x:Key="ImportantCompletedBrush" TrueBrush="#D32F2F" FalseBrush="#FF888888" />
     <conv:BoolToBrushConverter x:Key="ImportantButtonBrush" TrueBrush="#D32F2F" FalseBrush="#888888" />
@@ -29,9 +24,9 @@
     <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillChecked" Color="#999999"/>
     <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" Color="#888888"/>
     <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPressed" Color="#777777"/>
-  </Window.Resources>
+  </UserControl.Resources>
 
-  <Window.Styles>
+  <UserControl.Styles>
     <Style Selector="TextBox.inline-editor">
       <Style.Resources>
         <SolidColorBrush x:Key="TextControlBackground" Color="#00FFFFFF"/>
@@ -63,21 +58,16 @@
       <Setter Property="BorderThickness" Value="1"/>
     </Style>
 
-  </Window.Styles>
+  </UserControl.Styles>
 
   <Design.DataContext>
     <vm:NoteViewModel />
   </Design.DataContext>
 
-  <Grid>
-    <Grid x:Name="EditorGrid"
-          RowDefinitions="Auto,Auto,*,Auto"
-          Focusable="True"
-          PointerPressed="OnBackgroundPointerPressed"
-          IsEnabled="{Binding IsEditable}">
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Focusable="True" PointerPressed="OnBackgroundPointerPressed">
     <!-- Title Section -->
-    <Border Grid.Row="0" 
-            Background="#33000000" 
+    <Border Grid.Row="0"
+            Background="#33000000"
             Padding="10,6"
             CornerRadius="5,5,0,0"
             Margin="8,8,8,3">
@@ -110,18 +100,8 @@
                        IsVisible="{Binding Note.IsPinned}"/>
           </Panel>
         </Button>
-        <!-- Refresh Button -->
-        <Button Grid.Column="2"
-                Command="{Binding RefreshNoteCommand}"
-                Content="&#x21bb;"
-                FontSize="14"
-                Padding="4"
-                Background="Transparent"
-                BorderThickness="0"
-                ToolTip.Tip="Refresh Note"/>
-
         <!-- Color Picker Menu -->
-        <DropDownButton Grid.Column="3"
+        <DropDownButton Grid.Column="2"
                         Content="&#x1F3A8;"
                         FontFamily="{StaticResource EmojiFontFamily}"
                         FontSize="14"
@@ -213,27 +193,40 @@
             </MenuFlyout>
           </DropDownButton.Flyout>
         </DropDownButton>
+
+        <!-- Close button - only needed on mobile where there is no OS window chrome -->
+        <Button Grid.Column="3"
+                Content="&#x2715;"
+                FontSize="14"
+                Padding="6,4"
+                Background="Transparent"
+                BorderThickness="0"
+                Foreground="#FF444444"
+                IsVisible="{OnPlatform Default=False, iOS=True, Android=True}"
+                Click="OnMobileCloseButtonClick"/>
       </Grid>
     </Border>
 
     <!-- Separator -->
-    <Border Grid.Row="1" 
-            Height="1" 
-            Background="#66000000" 
+    <Border Grid.Row="1"
+            Height="1"
+            Background="#66000000"
             Margin="16,3,16,6"/>
 
     <!-- Items List -->
     <ScrollViewer Grid.Row="2" Margin="4,0,4,6" Focusable="True" PointerPressed="OnBackgroundPointerPressed"
                   HorizontalScrollBarVisibility="Disabled">
-      <ItemsControl x:Name="ItemsControl" ItemsSource="{Binding Note.Items}" x:CompileBindings="False" DragDrop.AllowDrop="True">
+      <ItemsControl x:Name="ItemsControl" ItemsSource="{Binding Note.Items}" x:CompileBindings="False"
+                    DragDrop.AllowDrop="{OnPlatform Default=True, iOS=False, Android=False}">
         <ItemsControl.ItemTemplate>
           <DataTemplate>
             <Grid x:Name="ItemRow" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="1" Margin="2,0,0,0" MinHeight="6"
-                  DragDrop.AllowDrop="True"
+                  DragDrop.AllowDrop="{OnPlatform Default=True, iOS=False, Android=False}"
                   DragDrop.DragEnter="OnItemRowDragEnter"
                   DragDrop.DragOver="OnItemRowDragOver"
                   DragDrop.DragLeave="OnItemRowDragLeave"
                   DragDrop.Drop="OnItemRowDrop"
+                  PointerReleased="OnItemRowPointerReleased"
                   Background="{Binding IsImportant, Converter={StaticResource ImportantRowBrush}}">
               <Border x:Name="DropIndicatorBefore"
                       Grid.ColumnSpan="7"
@@ -301,7 +294,7 @@
               </Button>
 
               <!-- Checkbox -->
-              <CheckBox Grid.Column="2" 
+              <CheckBox Grid.Column="2"
                         IsChecked="{Binding IsCompleted}"
                         IsVisible="{Binding IsHeading, Converter={StaticResource NotConverter}}"
                         IsEnabled="{Binding IsHeading, Converter={StaticResource NotConverter}}"
@@ -312,11 +305,11 @@
                   <ScaleTransform ScaleX="0.9" ScaleY="0.9"/>
                 </CheckBox.RenderTransform>
               </CheckBox>
-              
+
               <!-- Item Text with conditional styling -->
               <Grid Grid.Column="3">
                 <!-- Heading text -->
-                <TextBox Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                <TextBox Text="{Binding Text}"
                          Classes="inline-editor"
                          FontSize="16"
                          TextWrapping="Wrap"
@@ -332,7 +325,7 @@
                          KeyDown="OnItemTextBoxKeyDown"/>
 
                 <!-- Show non-strikethrough text when not completed (non-heading) -->
-                <TextBox Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                <TextBox Text="{Binding Text}"
                          Classes="inline-editor"
                          FontSize="12"
                          TextWrapping="Wrap"
@@ -356,10 +349,10 @@
                     <Binding Path="IsImportant" Converter="{StaticResource ImportantBrush}" />
                   </TextBox.Foreground>
                 </TextBox>
-                
+
                 <!-- Show strikethrough text when completed (non-heading) -->
                 <Grid>
-                  <TextBox Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                  <TextBox Text="{Binding Text}"
                            Classes="inline-editor"
                            FontSize="12"
                            TextWrapping="Wrap"
@@ -437,46 +430,48 @@
                 </Button.IsHitTestVisible>
               </Button>
 
-<!-- Due Date Button -->
-<Button x:Name="DueDateButton"
-        Grid.Column="5"
-        Width="18"
-        Content="&#x1F4C5;"
-        FontFamily="{StaticResource EmojiFontFamily}"
-        Background="Transparent"
-        BorderThickness="0"
-        FontSize="13"
-        Padding="0"
-        Margin="0,0,0,0"
-        Foreground="#555555"
-        Click="OnDueDateButtonClick">
-  <Button.Opacity>
-    <MultiBinding Converter="{StaticResource BoolOrConverter}">
-      <Binding Path="HasDueDate" />
-      <Binding Path="#ItemRow.IsPointerOver" />
-    </MultiBinding>
-  </Button.Opacity>
-  <Button.IsHitTestVisible>
-    <MultiBinding Converter="{StaticResource BoolOrConverter}">
-      <Binding Path="HasDueDate" />
-      <Binding Path="#ItemRow.IsPointerOver" />
-    </MultiBinding>
-  </Button.IsHitTestVisible>
-</Button>
-
-<!-- Delete Button -->
-               <Button Grid.Column="6"
-                       Width="18"
-                       Content="X"
-                       Click="OnDeleteButtonClick"
-                       Background="Transparent"
-                       BorderThickness="0"
-                       FontSize="11"
-                       Padding="0"
-                       Margin="3,0,14,0"
-                       Foreground="#D32F2F"
-                       IsVisible="{Binding #ItemRow.IsPointerOver}">
+              <!-- Due Date Button -->
+              <Button x:Name="DueDateButton"
+                      Grid.Column="5"
+                      Width="18"
+                      Content="&#x1F4C5;"
+                      FontFamily="{StaticResource EmojiFontFamily}"
+                      Background="Transparent"
+                      BorderThickness="0"
+                      FontSize="13"
+                      Padding="0"
+                      Margin="0,0,0,0"
+                      Foreground="#555555"
+                      Click="OnDueDateButtonClick">
+                <Button.Opacity>
+                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
+                    <Binding Path="HasDueDate" />
+                    <Binding Path="#ItemRow.IsPointerOver" />
+                  </MultiBinding>
+                </Button.Opacity>
+                <Button.IsHitTestVisible>
+                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
+                    <Binding Path="HasDueDate" />
+                    <Binding Path="#ItemRow.IsPointerOver" />
+                  </MultiBinding>
+                </Button.IsHitTestVisible>
               </Button>
+
+              <!-- Delete Button -->
+              <Button Grid.Column="6"
+                      Width="18"
+                      Content="X"
+                      Click="OnDeleteButtonClick"
+                      Background="Transparent"
+                      BorderThickness="0"
+                      FontSize="11"
+                      Padding="0"
+                      Margin="3,0,14,0"
+                      Foreground="#D32F2F"
+                      IsVisible="{Binding #ItemRow.IsPointerOver}">
+              </Button>
+
+              <!-- Column 7 reserved for mobile tap area (no visible indicator needed) -->
             </Grid>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
@@ -484,8 +479,8 @@
     </ScrollViewer>
 
     <!-- Input Area -->
-    <Border Grid.Row="3" 
-            Background="#33000000" 
+    <Border Grid.Row="3"
+            Background="#33000000"
             Padding="10"
             CornerRadius="0,0,5,5"
             Margin="8,3,8,8">
@@ -512,7 +507,7 @@
                  CornerRadius="3"
                  FontSize="12"
                  KeyDown="OnTextBoxKeyDown"/>
-        
+
         <Button Grid.Column="2"
                 Content="+"
                 Command="{Binding AddItemCommand}"
@@ -524,33 +519,5 @@
                 FontSize="14"/>
       </Grid>
     </Border>
-    </Grid>
-
-    <Border IsVisible="{Binding IsLocked}"
-            Background="#AA111111"
-            Margin="10"
-            CornerRadius="8"
-            Padding="14"
-            HorizontalAlignment="Stretch"
-            VerticalAlignment="Top">
-      <StackPanel Spacing="10">
-        <TextBlock Text="{Binding LockMessage}"
-                   Foreground="White"
-                   FontSize="14"
-                   TextWrapping="Wrap"/>
-        <StackPanel Orientation="Horizontal" Spacing="8">
-          <Button Content="Take Over"
-                  Click="OnTakeOverClick"
-                  Background="#FF4CAF50"
-                  Foreground="White"
-                  Padding="12,6"/>
-          <Button Content="Refresh Lock"
-                  Click="OnRefreshLockClick"
-                  Background="#FF757575"
-                  Foreground="White"
-                  Padding="12,6"/>
-        </StackPanel>
-      </StackPanel>
-    </Border>
   </Grid>
-</Window>
+</UserControl>
