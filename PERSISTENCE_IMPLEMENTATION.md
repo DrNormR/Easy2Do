@@ -221,6 +221,26 @@ Added new functionality:
 - Emoji render in color in both icon controls and list item text entry.
 - Delete `X` behavior remains reliable and returns to hover visibility.
 
+## Linux .deb Packaging Notes (Release 2.2)
+
+### What We Added
+- Added Debian packaging files:
+  - `packaging/deb/DEBIAN/control`
+  - `packaging/deb/DEBIAN/postinst`
+  - `packaging/deb/usr/share/applications/easy2do.desktop`
+- Added build helper script: `packaging/build-deb.sh`
+
+### Build Flow
+- Publish Linux self-contained build first:
+  - `dotnet publish Easy2Do.Desktop/Easy2Do.Desktop.csproj -c Release -r linux-x64 --self-contained true`
+- Build package from PowerShell through WSL Ubuntu:
+  - `wsl -d Ubuntu bash -lc "/mnt/c/Users/normanr/Easy2Do/Easy2Do/packaging/build-deb.sh"`
+
+### Output
+- Final package path: `easy2do_linux_amd64.deb` (repo root)
+- Package installs app under `/opt/easy2do`
+- Desktop entry installs to `/usr/share/applications/easy2do.desktop`
+
 ## Supabase Setup Notes (Stage 3)
 
 ### Tables (Postgres)

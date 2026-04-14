@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Easy2Do
+Comment=Sticky note to-do app
+Exec=/opt/easy2do/Easy2Do.Desktop
+Icon=easy2do
+Terminal=false
+Categories=Utility;Office;

@@ -25,7 +25,7 @@ A simple and elegant to-do list application built with Avalonia UI for .NET 8.
 - **To-Do Items**: 
   - Add items by typing and pressing Enter
   - Check items off to mark as complete (strikethrough)
-  - Delete individual items
+  - Delete individual items (including newly added rows)
   - Completed items remain visible but are struck through
 - **Auto-Save**: Changes are automatically saved as you work
 
@@ -43,6 +43,7 @@ A simple and elegant to-do list application built with Avalonia UI for .NET 8.
 - Application settings: `%LocalAppData%/Easy2Do/settings.json`
 - **Auto-Save**: All changes are saved automatically - no need to manually save!
 - Legacy JSON import is supported for one-time migration
+- Sync merge preserves newly created local items until remote confirmation
 - Notes persist between application sessions
 
 ## How to Use
@@ -71,6 +72,15 @@ A simple and elegant to-do list application built with Avalonia UI for .NET 8.
 - **UI Framework**: Avalonia UI 11.x
 - **MVVM Pattern**: Uses CommunityToolkit.Mvvm for ViewModels and Commands
 - **Cross-Platform**: Desktop (Windows, macOS, Linux) with mobile support structure
+
+## Linux Packaging (.deb)
+
+- Linux release payload is published from `Easy2Do.Desktop/bin/Release/net8.0/linux-x64/publish`
+- Debian package output is `easy2do_linux_amd64.deb` at repo root
+- Packaging metadata and desktop entry live under `packaging/deb/`
+- Build helper script: `packaging/build-deb.sh`
+- Build command from PowerShell (via WSL Ubuntu):
+  - `wsl -d Ubuntu bash -lc "/mnt/c/Users/normanr/Easy2Do/Easy2Do/packaging/build-deb.sh"`
 
 ## Project Structure
 
