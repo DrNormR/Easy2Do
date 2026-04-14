@@ -1,131 +1,353 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
-using System.Threading;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Easy2Do.Models;
+using Microsoft.Data.Sqlite;
 
 namespace Easy2Do.Services;
 
 /// <summary>
-/// Stores each note as an individual JSON file inside a "notes" subdirectory.
-/// A lightweight manifest.json keeps the display order.
-/// A FileSystemWatcher detects external changes (OneDrive / Dropbox sync).
+/// SQLite-backed storage for notes and items.
+/// A legacy JSON import is supported for one-time migration.
 /// </summary>
 public class StorageService : IDisposable
 {
     private readonly SettingsService _settingsService;
     private readonly BackupService _backupService;
+
+    private const string DatabaseFile = "easy2do.db";
     private const string NotesFolder = "notes";
     private const string ManifestFile = "manifest.json";
     private const string LegacyFile = "notes.json";
 
-    private FileSystemWatcher? _watcher;
-    private bool _isSelfWriting;
+    private bool _initialized;
+    private readonly object _initLock = new();
+    private string? _initializedForPath;
 
-    // Polling fallback to catch changes missed by FileSystemWatcher (e.g., cloud sync behavior)
-    private Timer? _pollTimer;
-    private readonly Dictionary<Guid, FileState> _knownFileStates = new();
-    private readonly object _lock = new();
-    private const int PollIntervalMs = 3000;
+    private readonly string _deviceName;
 
     /// <summary>
     /// Fired on the thread-pool when an external change is detected for a specific note file.
-    /// The Guid is the note Id parsed from the filename.
+    /// No-op in SQLite mode (reserved for future sync integration).
     /// </summary>
     public event Action<Guid>? NoteFileChanged;
 
     /// <summary>
     /// Fired when a note file is deleted externally.
+    /// No-op in SQLite mode (reserved for future sync integration).
     /// </summary>
     public event Action<Guid>? NoteFileDeleted;
 
     /// <summary>
     /// Fired when a new note file appears externally.
+    /// No-op in SQLite mode (reserved for future sync integration).
     /// </summary>
     public event Action<Guid>? NoteFileCreated;
 
     /// <summary>
-    /// Fired with a human-readable status message when a sync operation completes.
+    /// Fired when another device requests takeover for a note lock this device currently owns.
+    /// No-op in SQLite mode.
     /// </summary>
-    public event Action<string>? SyncStatusChanged;
+    public event Action<Guid, string>? NoteLockTakeoverRequested;
 
-    // Use the source-generated context so serialization is AOT-safe (required for iOS).
-    private static readonly JsonSerializerOptions JsonOptions = AppJsonContext.Default.Options;
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        WriteIndented = true
+    };
+    private static readonly HttpClient HttpClient = new();
+
+    public event Action<string>? SyncStatusChanged;
 
     public StorageService(SettingsService settingsService)
     {
         _settingsService = settingsService;
         _backupService = new BackupService(settingsService);
+        _deviceName = settingsService.GetDeviceName();
+        EnsureDatabaseInitialized();
     }
 
-    /// <summary>Returns the notes directory path (used by PowerSyncService as a proxy for DB path).</summary>
     public string GetDatabasePath()
     {
-        return GetNotesDirectory();
-    }
-
-    private string GetNotesDirectory()
-    {
         var storageLocation = _settingsService.GetStorageLocation();
-        return Path.Combine(storageLocation, NotesFolder);
+        return Path.Combine(storageLocation, DatabaseFile);
     }
 
-    private string GetManifestPath()
+    private void EnsureDatabaseInitialized()
     {
-        var storageLocation = _settingsService.GetStorageLocation();
-        return Path.Combine(storageLocation, ManifestFile);
+        lock (_initLock)
+        {
+            var dbPath = GetDatabasePath();
+            if (_initialized && string.Equals(_initializedForPath, dbPath, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var storageLocation = _settingsService.GetStorageLocation();
+            if (!Directory.Exists(storageLocation))
+                Directory.CreateDirectory(storageLocation);
+
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = @"
+CREATE TABLE IF NOT EXISTS notes (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    color TEXT NOT NULL,
+    created_date TEXT NOT NULL,
+    modified_date TEXT NOT NULL,
+    window_x REAL NOT NULL,
+    window_y REAL NOT NULL,
+    window_width REAL NOT NULL,
+    window_height REAL NOT NULL,
+    is_pinned INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS note_items (
+    id TEXT PRIMARY KEY,
+    note_id TEXT NOT NULL,
+    text TEXT NOT NULL,
+    is_completed INTEGER NOT NULL,
+    is_heading INTEGER NOT NULL,
+    is_important INTEGER NOT NULL,
+    text_attachment TEXT NOT NULL,
+    due_date TEXT NULL,
+    is_alarm_dismissed INTEGER NOT NULL,
+    snooze_until TEXT NULL,
+    created_at_utc TEXT NOT NULL,
+    updated_at_utc TEXT NOT NULL,
+    deleted_at_utc TEXT NULL,
+    position INTEGER NOT NULL,
+    FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_note_items_note_id ON note_items(note_id);
+
+CREATE TABLE IF NOT EXISTS note_order (
+    id TEXT PRIMARY KEY,
+    note_id TEXT NOT NULL,
+    sort_order INTEGER NOT NULL
+);
+";
+            command.ExecuteNonQuery();
+            EnsureNoteOrderHasIdColumn(connection);
+
+            _initialized = true;
+            _initializedForPath = dbPath;
+        }
     }
 
-    private static string NoteFileName(Guid id) => $"{id}.json";
+    private static void EnsureNoteOrderHasIdColumn(SqliteConnection connection)
+    {
+        var hasIdColumn = false;
+        using (var pragma = connection.CreateCommand())
+        {
+            pragma.CommandText = "PRAGMA table_info(note_order);";
+            using var reader = pragma.ExecuteReader();
+            while (reader.Read())
+            {
+                if (string.Equals(reader.GetString(1), "id", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasIdColumn = true;
+                    break;
+                }
+            }
+        }
 
-    private string NoteFilePath(Guid id) => Path.Combine(GetNotesDirectory(), NoteFileName(id));
+        if (hasIdColumn) return;
+
+        using var transaction = connection.BeginTransaction();
+        using (var rename = connection.CreateCommand())
+        {
+            rename.Transaction = transaction;
+            rename.CommandText = "ALTER TABLE note_order RENAME TO note_order_old;";
+            rename.ExecuteNonQuery();
+        }
+        using (var create = connection.CreateCommand())
+        {
+            create.Transaction = transaction;
+            create.CommandText = @"
+CREATE TABLE note_order (
+    id TEXT PRIMARY KEY,
+    note_id TEXT NOT NULL,
+    sort_order INTEGER NOT NULL
+);";
+            create.ExecuteNonQuery();
+        }
+        using (var copy = connection.CreateCommand())
+        {
+            copy.Transaction = transaction;
+            copy.CommandText = @"
+INSERT INTO note_order (id, note_id, sort_order)
+SELECT note_id, note_id, sort_order FROM note_order_old;";
+            copy.ExecuteNonQuery();
+        }
+        using (var drop = connection.CreateCommand())
+        {
+            drop.Transaction = transaction;
+            drop.CommandText = "DROP TABLE note_order_old;";
+            drop.ExecuteNonQuery();
+        }
+        transaction.Commit();
+    }
+
+    private SqliteConnection OpenConnection()
+    {
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = GetDatabasePath(),
+            Mode = SqliteOpenMode.ReadWriteCreate
+        }.ToString();
+
+        var connection = new SqliteConnection(connectionString);
+        connection.Open();
+        return connection;
+    }
+
+    private static string ToDb(DateTime value)
+    {
+        return value.ToString("O", CultureInfo.InvariantCulture);
+    }
+
+    private static string? ToDb(DateTime? value)
+    {
+        return value?.ToString("O", CultureInfo.InvariantCulture);
+    }
+
+    private static DateTime FromDb(string value)
+    {
+        return DateTime.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+    }
+
+    private static DateTime? FromDbNullable(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        return DateTime.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+    }
 
     // ──────────────────────────── Migration ────────────────────────────
 
     /// <summary>
-    /// One-time migration from the legacy single-file format.
+    /// One-time migration from the legacy JSON storage format.
     /// </summary>
     public async Task MigrateIfNeededAsync()
     {
+        EnsureDatabaseInitialized();
+
+        if (await HasAnyNotesAsync())
+            return;
+
         var storageLocation = _settingsService.GetStorageLocation();
         var legacyPath = Path.Combine(storageLocation, LegacyFile);
+        var notesDir = Path.Combine(storageLocation, NotesFolder);
+        var manifestPath = Path.Combine(storageLocation, ManifestFile);
 
-        if (!File.Exists(legacyPath))
+        var importedNotes = new List<Note>();
+
+        if (File.Exists(legacyPath))
+        {
+            try
+            {
+                var json = await File.ReadAllTextAsync(legacyPath);
+                var notes = JsonSerializer.Deserialize<List<Note>>(json, JsonOptions) ?? new List<Note>();
+                importedNotes.AddRange(notes);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Migration error (legacy): {ex.Message}");
+            }
+        }
+
+        if (Directory.Exists(notesDir))
+        {
+            foreach (var file in Directory.GetFiles(notesDir, "*.json"))
+            {
+                try
+                {
+                    var json = await File.ReadAllTextAsync(file);
+                    var note = JsonSerializer.Deserialize<Note>(json, JsonOptions);
+                    if (note != null)
+                        importedNotes.Add(note);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Migration error (file {file}): {ex.Message}");
+                }
+            }
+        }
+
+        if (importedNotes.Count == 0)
             return;
 
-        // Already migrated?
-        var notesDir = GetNotesDirectory();
-        if (Directory.Exists(notesDir) && Directory.GetFiles(notesDir, "*.json").Length > 0)
-            return;
+        var manifestOrder = new List<Guid>();
+        if (File.Exists(manifestPath))
+        {
+            try
+            {
+                var json = await File.ReadAllTextAsync(manifestPath);
+                var ids = JsonSerializer.Deserialize<List<Guid>>(json, JsonOptions);
+                if (ids != null)
+                    manifestOrder.AddRange(ids);
+            }
+            catch
+            {
+                // ignore manifest parse errors
+            }
+        }
 
+        // Deduplicate by Id (prefer first)
+        var uniqueNotes = new Dictionary<Guid, Note>();
+        foreach (var note in importedNotes)
+        {
+            if (!uniqueNotes.ContainsKey(note.Id))
+                uniqueNotes[note.Id] = note;
+        }
+
+        // Insert notes in manifest order, then any remaining.
+        var ordered = new List<Note>();
+        foreach (var id in manifestOrder)
+        {
+            if (uniqueNotes.TryGetValue(id, out var note))
+            {
+                ordered.Add(note);
+                uniqueNotes.Remove(id);
+            }
+        }
+        ordered.AddRange(uniqueNotes.Values);
+
+        foreach (var note in ordered)
+        {
+            NormalizeItems(note);
+            await SaveNoteAsync(note);
+        }
+
+        if (manifestOrder.Count > 0)
+            await SaveManifestAsync(manifestOrder);
+    }
+
+    private async Task<bool> HasAnyNotesAsync()
+    {
         try
         {
-            var json = await File.ReadAllTextAsync(legacyPath);
-            var notes = JsonSerializer.Deserialize<List<Note>>(json, JsonOptions);
-            if (notes is { Count: > 0 })
-            {
-                EnsureNotesDirectory();
-                foreach (var note in notes)
-                {
-                    await SaveNoteAsync(note);
-                }
-                await SaveManifestAsync(notes.Select(n => n.Id).ToList());
-            }
-
-            // Rename legacy file so it's not re-migrated
-            var backupPath = legacyPath + ".bak";
-            if (!File.Exists(backupPath))
-                File.Move(legacyPath, backupPath);
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT COUNT(1) FROM notes;";
+            var result = await command.ExecuteScalarAsync();
+            return Convert.ToInt32(result) > 0;
         }
-        catch (Exception ex)
+        catch (SqliteException ex) when (ex.Message.Contains("no such table: notes", StringComparison.OrdinalIgnoreCase))
         {
-            Console.WriteLine($"Migration error: {ex.Message}");
+            EnsureDatabaseInitialized();
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT COUNT(1) FROM notes;";
+            var result = await command.ExecuteScalarAsync();
+            return Convert.ToInt32(result) > 0;
         }
     }
 
@@ -133,370 +355,553 @@ public class StorageService : IDisposable
 
     public async Task<List<Note>> LoadAllNotesAsync()
     {
-        try
+        EnsureDatabaseInitialized();
+
+        using var connection = OpenConnection();
+
+        var orderedIds = new List<Guid>();
+        using (var command = connection.CreateCommand())
         {
-            var notesDir = GetNotesDirectory();
-            if (!Directory.Exists(notesDir))
-                return new List<Note>();
-
-            var manifest = await LoadManifestAsync();
-            var notes = new List<Note>();
-            var foundIds = new HashSet<Guid>();
-
-            // Load in manifest order
-            if (manifest.Count > 0)
+            command.CommandText = "SELECT note_id FROM note_order ORDER BY sort_order;";
+            using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
             {
-                foreach (var id in manifest)
-                {
-                    var note = await LoadNoteAsync(id);
-                    if (note != null)
-                    {
-                        notes.Add(note);
-                        foundIds.Add(id);
-                    }
-                }
+                var idText = reader.GetString(0);
+                if (Guid.TryParse(idText, out var id))
+                    orderedIds.Add(id);
             }
-
-            // Pick up any note files not in the manifest (created on another machine)
-            foreach (var file in Directory.GetFiles(notesDir, "*.json"))
-            {
-                var name = Path.GetFileNameWithoutExtension(file);
-                if (Guid.TryParse(name, out var id) && foundIds.Add(id))
-                {
-                    var note = await LoadNoteAsync(id);
-                    if (note != null)
-                        notes.Add(note);
-                }
-            }
-
-            return notes;
         }
-        catch (Exception ex)
+
+        var allIds = new List<Guid>();
+        using (var command = connection.CreateCommand())
         {
-            Console.WriteLine($"Error loading notes: {ex.Message}");
-            return new List<Note>();
+            command.CommandText = "SELECT id FROM notes;";
+            using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var idText = reader.GetString(0);
+                if (Guid.TryParse(idText, out var id))
+                    allIds.Add(id);
+            }
         }
+
+        var seen = new HashSet<Guid>();
+        var result = new List<Note>();
+
+        foreach (var id in orderedIds)
+        {
+            if (!seen.Add(id)) continue;
+            var note = await LoadNoteAsync(connection, id);
+            if (note != null)
+                result.Add(note);
+        }
+
+        foreach (var id in allIds)
+        {
+            if (!seen.Add(id)) continue;
+            var note = await LoadNoteAsync(connection, id);
+            if (note != null)
+                result.Add(note);
+        }
+
+        Console.WriteLine($"[Storage] Loaded {result.Count} notes from {GetDatabasePath()}");
+        foreach (var note in result)
+            Console.WriteLine($"[Storage] Note {note.Id} '{note.Title}'");
+        return result;
     }
 
     public async Task<Note?> LoadNoteAsync(Guid id)
     {
-        try
-        {
-            var path = NoteFilePath(id);
-            System.Diagnostics.Debug.WriteLine($"LoadNoteAsync: loading note file {path}");
-            if (!File.Exists(path))
-            {
-                System.Diagnostics.Debug.WriteLine($"LoadNoteAsync: file does not exist for note {id}");
-                return null;
-            }
-            var json = await File.ReadAllTextAsync(path);
-            Console.WriteLine($"[Load] note {id}: len={json.Length}, preview={json.Substring(0, Math.Min(120, json.Length))}");
-            try
-            {
-                var note = JsonSerializer.Deserialize<Note>(json, JsonOptions);
-                if (note == null)
-                    Console.WriteLine($"[Load] FAILED to deserialize note {id}");
-                else
-                {
-                    note.LastWriteTimeUtc = File.GetLastWriteTimeUtc(path);
-                    Console.WriteLine($"[Load] note {id}: title='{note.Title}' items={note.Items?.Count}");
-                }
-                return note;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"LoadNoteAsync: exception for note {id}: {ex.Message}");
-                return null;
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error loading note {id}: {ex.Message}");
+        EnsureDatabaseInitialized();
+        using var connection = OpenConnection();
+        return await LoadNoteAsync(connection, id);
+    }
+
+    private async Task<Note?> LoadNoteAsync(SqliteConnection connection, Guid id)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+SELECT id, title, color, created_date, modified_date, window_x, window_y, window_width, window_height, is_pinned
+FROM notes
+WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", id.ToString());
+
+        using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
             return null;
+
+        var note = new Note
+        {
+            Id = Guid.Parse(reader.GetString(0)),
+            Title = reader.GetString(1),
+            Color = reader.GetString(2),
+            CreatedDate = FromDb(reader.GetString(3)),
+            ModifiedDate = FromDb(reader.GetString(4)),
+            WindowX = reader.GetDouble(5),
+            WindowY = reader.GetDouble(6),
+            WindowWidth = reader.GetDouble(7),
+            WindowHeight = reader.GetDouble(8),
+            IsPinned = reader.GetInt32(9) != 0
+        };
+
+        await reader.CloseAsync();
+
+        using var itemsCommand = connection.CreateCommand();
+        itemsCommand.CommandText = @"
+SELECT id, text, is_completed, is_heading, is_important, text_attachment, due_date,
+       is_alarm_dismissed, snooze_until, created_at_utc, updated_at_utc, deleted_at_utc
+FROM note_items
+WHERE note_id = $note_id
+ORDER BY position;";
+        itemsCommand.Parameters.AddWithValue("$note_id", id.ToString());
+
+        using var itemReader = await itemsCommand.ExecuteReaderAsync();
+        while (await itemReader.ReadAsync())
+        {
+            var item = new TodoItem
+            {
+                Id = Guid.Parse(itemReader.GetString(0)),
+                Text = itemReader.GetString(1),
+                IsCompleted = itemReader.GetInt32(2) != 0,
+                IsHeading = itemReader.GetInt32(3) != 0,
+                IsImportant = itemReader.GetInt32(4) != 0,
+                TextAttachment = itemReader.GetString(5),
+                DueDate = FromDbNullable(itemReader.IsDBNull(6) ? null : itemReader.GetString(6)),
+                IsAlarmDismissed = itemReader.GetInt32(7) != 0,
+                SnoozeUntil = FromDbNullable(itemReader.IsDBNull(8) ? null : itemReader.GetString(8)),
+                CreatedAtUtc = FromDb(itemReader.GetString(9)),
+                UpdatedAtUtc = FromDb(itemReader.GetString(10)),
+                DeletedAtUtc = FromDbNullable(itemReader.IsDBNull(11) ? null : itemReader.GetString(11))
+            };
+
+            note.Items.Add(item);
         }
+
+        return note;
     }
 
     // ──────────────────────────── Save ────────────────────────────
 
     public async Task SaveNoteAsync(Note note)
     {
+        EnsureDatabaseInitialized();
+        NormalizeItems(note);
+        NormalizeWindowBounds(note);
+        Console.WriteLine($"[Storage] SaveNote {note.Id} '{note.Title}' to {GetDatabasePath()}");
+
+        using var connection = OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        using (var command = connection.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = @"
+INSERT INTO notes (id, title, color, created_date, modified_date, window_x, window_y, window_width, window_height, is_pinned)
+VALUES ($id, $title, $color, $created_date, $modified_date, $window_x, $window_y, $window_width, $window_height, $is_pinned)
+ON CONFLICT(id) DO UPDATE SET
+    title = excluded.title,
+    color = excluded.color,
+    created_date = excluded.created_date,
+    modified_date = excluded.modified_date,
+    window_x = excluded.window_x,
+    window_y = excluded.window_y,
+    window_width = excluded.window_width,
+    window_height = excluded.window_height,
+    is_pinned = excluded.is_pinned;";
+
+            command.Parameters.AddWithValue("$id", note.Id.ToString());
+            command.Parameters.AddWithValue("$title", note.Title ?? string.Empty);
+            command.Parameters.AddWithValue("$color", note.Color ?? "#FFFFE680");
+            command.Parameters.AddWithValue("$created_date", ToDb(note.CreatedDate));
+            command.Parameters.AddWithValue("$modified_date", ToDb(note.ModifiedDate));
+            command.Parameters.AddWithValue("$window_x", note.WindowX);
+            command.Parameters.AddWithValue("$window_y", note.WindowY);
+            command.Parameters.AddWithValue("$window_width", note.WindowWidth);
+            command.Parameters.AddWithValue("$window_height", note.WindowHeight);
+            command.Parameters.AddWithValue("$is_pinned", note.IsPinned ? 1 : 0);
+            await command.ExecuteNonQueryAsync();
+        }
+
+        using (var deleteItems = connection.CreateCommand())
+        {
+            deleteItems.Transaction = transaction;
+            deleteItems.CommandText = "DELETE FROM note_items WHERE note_id = $note_id;";
+            deleteItems.Parameters.AddWithValue("$note_id", note.Id.ToString());
+            await deleteItems.ExecuteNonQueryAsync();
+        }
+
+        for (var i = 0; i < note.Items.Count; i++)
+        {
+            var item = note.Items[i];
+            using var insertItem = connection.CreateCommand();
+            insertItem.Transaction = transaction;
+            insertItem.CommandText = @"
+INSERT INTO note_items (
+    id, note_id, text, is_completed, is_heading, is_important, text_attachment,
+    due_date, is_alarm_dismissed, snooze_until, created_at_utc, updated_at_utc, deleted_at_utc, position
+) VALUES (
+    $id, $note_id, $text, $is_completed, $is_heading, $is_important, $text_attachment,
+    $due_date, $is_alarm_dismissed, $snooze_until, $created_at_utc, $updated_at_utc, $deleted_at_utc, $position
+);";
+
+            insertItem.Parameters.AddWithValue("$id", item.Id.ToString());
+            insertItem.Parameters.AddWithValue("$note_id", note.Id.ToString());
+            insertItem.Parameters.AddWithValue("$text", item.Text ?? string.Empty);
+            insertItem.Parameters.AddWithValue("$is_completed", item.IsCompleted ? 1 : 0);
+            insertItem.Parameters.AddWithValue("$is_heading", item.IsHeading ? 1 : 0);
+            insertItem.Parameters.AddWithValue("$is_important", item.IsImportant ? 1 : 0);
+            insertItem.Parameters.AddWithValue("$text_attachment", item.TextAttachment ?? string.Empty);
+            insertItem.Parameters.AddWithValue("$due_date", (object?)ToDb(item.DueDate) ?? DBNull.Value);
+            insertItem.Parameters.AddWithValue("$is_alarm_dismissed", item.IsAlarmDismissed ? 1 : 0);
+            insertItem.Parameters.AddWithValue("$snooze_until", (object?)ToDb(item.SnoozeUntil) ?? DBNull.Value);
+            insertItem.Parameters.AddWithValue("$created_at_utc", ToDb(item.CreatedAtUtc));
+            insertItem.Parameters.AddWithValue("$updated_at_utc", ToDb(item.UpdatedAtUtc));
+            insertItem.Parameters.AddWithValue("$deleted_at_utc", (object?)ToDb(item.DeletedAtUtc) ?? DBNull.Value);
+            insertItem.Parameters.AddWithValue("$position", i);
+            await insertItem.ExecuteNonQueryAsync();
+        }
+
+        using (var ensureOrder = connection.CreateCommand())
+        {
+            ensureOrder.Transaction = transaction;
+            ensureOrder.CommandText = @"
+INSERT INTO note_order (id, note_id, sort_order)
+VALUES ($note_id, $note_id, COALESCE((SELECT MAX(sort_order) FROM note_order), -1) + 1)
+ON CONFLICT(id) DO NOTHING;";
+            ensureOrder.Parameters.AddWithValue("$note_id", note.Id.ToString());
+            await ensureOrder.ExecuteNonQueryAsync();
+        }
+
+        transaction.Commit();
+
         try
         {
-            EnsureNotesDirectory();
-            var path = NoteFilePath(note.Id);
-            DateTime? fileLastWrite = null;
-            if (File.Exists(path))
-            {
-                fileLastWrite = File.GetLastWriteTimeUtc(path);
-            }
-            // Only allow save if file is unchanged or does not exist
-            if (fileLastWrite == null ||
-                note.LastWriteTimeUtc == null ||
-                Math.Abs((fileLastWrite.Value - note.LastWriteTimeUtc.Value).TotalSeconds) < 2)
-            {
-                note.ModifiedDate = DateTime.UtcNow;
-                _isSelfWriting = true;
-                var json = JsonSerializer.Serialize(note, JsonOptions);
-                Console.WriteLine($"[Save] note {note.Id}: title='{note.Title}' items={note.Items?.Count} json_len={json.Length} preview={json.Substring(0, Math.Min(120, json.Length))}");
-                await File.WriteAllTextAsync(path, json);
-                await _backupService.BackupNoteAsync(note.Id, json);
-                note.LastWriteTimeUtc = File.GetLastWriteTimeUtc(path);
-            }
-            else
-            {
-                throw new InvalidOperationException("The note has been modified elsewhere. Please reload before saving.");
-            }
+            var json = JsonSerializer.Serialize(note, JsonOptions);
+            await _backupService.BackupNoteAsync(note.Id, json);
         }
-        catch (Exception ex)
+        catch
         {
-            Console.WriteLine($"Error saving note {note.Id}: {ex.Message}");
-            throw;
+            // best-effort backup
         }
-        finally
-        {
-            _isSelfWriting = false;
-        }
+
+        await LogPersistedTitleAsync(note.Id);
+        await TryUpsertNoteToSupabaseAsync(note);
+        await TryUpsertNoteItemsToSupabaseAsync(note);
     }
 
     public async Task DeleteNoteFileAsync(Guid id)
     {
-        try
+        EnsureDatabaseInitialized();
+
+        using var connection = OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        using (var deleteItems = connection.CreateCommand())
         {
-            _isSelfWriting = true;
-            var path = NoteFilePath(id);
-            if (File.Exists(path))
-                File.Delete(path);
-            _backupService.DeleteBackupsForNote(id);
+            deleteItems.Transaction = transaction;
+            deleteItems.CommandText = "DELETE FROM note_items WHERE note_id = $note_id;";
+            deleteItems.Parameters.AddWithValue("$note_id", id.ToString());
+            await deleteItems.ExecuteNonQueryAsync();
         }
-        catch (Exception ex)
+
+        using (var deleteNote = connection.CreateCommand())
         {
-            Console.WriteLine($"Error deleting note {id}: {ex.Message}");
+            deleteNote.Transaction = transaction;
+            deleteNote.CommandText = "DELETE FROM notes WHERE id = $id;";
+            deleteNote.Parameters.AddWithValue("$id", id.ToString());
+            await deleteNote.ExecuteNonQueryAsync();
         }
-        finally
+
+        using (var deleteOrder = connection.CreateCommand())
         {
-            _isSelfWriting = false;
+            deleteOrder.Transaction = transaction;
+            deleteOrder.CommandText = "DELETE FROM note_order WHERE note_id = $note_id;";
+            deleteOrder.Parameters.AddWithValue("$note_id", id.ToString());
+            await deleteOrder.ExecuteNonQueryAsync();
         }
-        await Task.CompletedTask;
+
+        transaction.Commit();
+
+        _backupService.DeleteBackupsForNote(id);
+        await TryDeleteNoteFromSupabaseAsync(id);
     }
 
     public async Task SaveManifestAsync(IList<Guid> noteIds)
     {
+        EnsureDatabaseInitialized();
+
+        using var connection = OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        using (var clear = connection.CreateCommand())
+        {
+            clear.Transaction = transaction;
+            clear.CommandText = "DELETE FROM note_order;";
+            await clear.ExecuteNonQueryAsync();
+        }
+
+        for (var i = 0; i < noteIds.Count; i++)
+        {
+            using var insert = connection.CreateCommand();
+            insert.Transaction = transaction;
+            insert.CommandText = "INSERT INTO note_order (id, note_id, sort_order) VALUES ($id, $note_id, $sort_order);";
+            insert.Parameters.AddWithValue("$id", noteIds[i].ToString());
+            insert.Parameters.AddWithValue("$note_id", noteIds[i].ToString());
+            insert.Parameters.AddWithValue("$sort_order", i);
+            await insert.ExecuteNonQueryAsync();
+        }
+
+        transaction.Commit();
+        await TryUpsertNoteOrderToSupabaseAsync(noteIds);
+    }
+
+    public async Task RestoreBackupAsync(string backupFilePath)
+    {
         try
         {
-            var storageLocation = _settingsService.GetStorageLocation();
-            if (!Directory.Exists(storageLocation))
-                Directory.CreateDirectory(storageLocation);
+            var noteJson = await File.ReadAllTextAsync(backupFilePath);
+            var note = JsonSerializer.Deserialize<Note>(noteJson, JsonOptions);
+            if (note == null) return;
 
-            _isSelfWriting = true;
-            // Must use the concrete List<Guid> typed accessor — IList<Guid> is not
-            // registered in AppJsonContext and fails on iOS AOT.
-            var json = JsonSerializer.Serialize(
-                noteIds as List<Guid> ?? noteIds.ToList(),
-                AppJsonContext.Default.ListGuid);
-            await File.WriteAllTextAsync(GetManifestPath(), json);
+            NormalizeItems(note);
+            await SaveNoteAsync(note);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error saving manifest: {ex.Message}");
-        }
-        finally
-        {
-            _isSelfWriting = false;
+            Console.WriteLine($"Restore error: {ex.Message}");
         }
     }
 
-    private async Task<List<Guid>> LoadManifestAsync()
+    private static bool NormalizeItems(Note note)
     {
-        try
+        if (note.Items == null || note.Items.Count == 0)
+            return false;
+
+        var changed = false;
+        var nowUtc = DateTime.UtcNow;
+
+        foreach (var item in note.Items)
         {
-            var path = GetManifestPath();
-            if (!File.Exists(path))
-                return new List<Guid>();
-
-            var json = await File.ReadAllTextAsync(path);
-            return JsonSerializer.Deserialize<List<Guid>>(json, JsonOptions) ?? new List<Guid>();
-        }
-        catch
-        {
-            return new List<Guid>();
-        }
-    }
-
-    private void EnsureNotesDirectory()
-    {
-        var dir = GetNotesDirectory();
-        if (!Directory.Exists(dir))
-            Directory.CreateDirectory(dir);
-    }
-
-    // ──────────────────────────── File Watcher ────────────────────────────
-
-    public void StartWatching()
-    {
-        StopWatching();
-
-        var notesDir = GetNotesDirectory();
-        EnsureNotesDirectory();
-
-        _watcher = new FileSystemWatcher(notesDir, "*.json")
-        {
-            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.CreationTime,
-            EnableRaisingEvents = true
-        };
-
-        _watcher.Changed += OnFileChanged;
-        _watcher.Created += OnFileCreated;
-        _watcher.Deleted += OnFileDeleted;
-        _watcher.Renamed += OnFileRenamed;
-
-        // Initialize known file timestamps for polling
-        lock (_lock)
-        {
-            _knownFileStates.Clear();
-            foreach (var file in Directory.GetFiles(notesDir, "*.json"))
+            if (item.Id == Guid.Empty)
             {
-                var name = Path.GetFileNameWithoutExtension(file);
-                if (Guid.TryParse(name, out var id))
-                {
-                    try
-                    {
-                        var info = new FileInfo(file);
-                        _knownFileStates[id] = new FileState(info.LastWriteTimeUtc, info.Length);
-                    }
-                    catch { }
-                }
+                item.Id = Guid.NewGuid();
+                changed = true;
+            }
+
+            if (item.CreatedAtUtc == default)
+            {
+                item.CreatedAtUtc = nowUtc;
+                changed = true;
+            }
+
+            if (item.UpdatedAtUtc == default)
+            {
+                item.UpdatedAtUtc = nowUtc;
+                changed = true;
             }
         }
 
-        // Start polling timer as a fallback for cloud syncs that may bypass FS events
-        _pollTimer = new Timer(_ => PollDirectory(), null, PollIntervalMs, PollIntervalMs);
+        return changed;
+    }
+
+    private static void NormalizeWindowBounds(Note note)
+    {
+        if (double.IsNaN(note.WindowX)) note.WindowX = 0;
+        if (double.IsNaN(note.WindowY)) note.WindowY = 0;
+        if (double.IsNaN(note.WindowWidth)) note.WindowWidth = 320;
+        if (double.IsNaN(note.WindowHeight)) note.WindowHeight = 420;
+    }
+
+    // ──────────────────────────── File Watcher (no-op) ────────────────────────────
+
+    public void StartWatching()
+    {
     }
 
     public void StopWatching()
     {
-        if (_watcher != null)
+    }
+
+    // ──────────────────────────── Locks (no-op, single-device) ────────────────────────────
+
+    public async Task<NoteLockAcquireResult> TryAcquireNoteLockAsync(Guid noteId, bool requestTakeover)
+    {
+        await Task.CompletedTask;
+        return new NoteLockAcquireResult(true, false, null, null);
+    }
+
+    public async Task<NoteLockInfo?> GetNoteLockInfoAsync(Guid noteId)
+    {
+        await Task.CompletedTask;
+        return null;
+    }
+
+    public bool IsOwnedByThisDevice(NoteLockInfo? info)
+    {
+        return true;
+    }
+
+    public string ThisDeviceName => _deviceName;
+
+    public async Task<bool> WaitForLockAsync(Guid noteId, TimeSpan timeout, TimeSpan pollDelay)
+    {
+        await Task.CompletedTask;
+        return true;
+    }
+
+    public async Task<bool> ForceTakeoverAsync(Guid noteId, TimeSpan minRequestAge)
+    {
+        await Task.CompletedTask;
+        return true;
+    }
+
+    public void StartOwnedLockHeartbeat(Guid noteId)
+    {
+    }
+
+    public async Task StopOwnedLockHeartbeatAsync(Guid noteId)
+    {
+        await Task.CompletedTask;
+    }
+
+    public async Task ReleaseNoteLockIfOwnedAsync(Guid noteId)
+    {
+        await Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+    }
+
+    public async Task ReplaceAllNotesAsync(IReadOnlyList<Note> notes, IReadOnlyList<Guid> orderedIds)
+    {
+        EnsureDatabaseInitialized();
+
+        using var connection = OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        using (var clearItems = connection.CreateCommand())
         {
-            _watcher.EnableRaisingEvents = false;
-            _watcher.Changed -= OnFileChanged;
-            _watcher.Created -= OnFileCreated;
-            _watcher.Deleted -= OnFileDeleted;
-            _watcher.Renamed -= OnFileRenamed;
-            _watcher.Dispose();
-            _watcher = null;
+            clearItems.Transaction = transaction;
+            clearItems.CommandText = "DELETE FROM note_items;";
+            await clearItems.ExecuteNonQueryAsync();
         }
 
-        if (_pollTimer != null)
+        using (var clearNotes = connection.CreateCommand())
         {
-            _pollTimer.Dispose();
-            _pollTimer = null;
+            clearNotes.Transaction = transaction;
+            clearNotes.CommandText = "DELETE FROM notes;";
+            await clearNotes.ExecuteNonQueryAsync();
         }
-    }
 
-    private void OnFileChanged(object sender, FileSystemEventArgs e)
-    {
-        if (_isSelfWriting) return;
-        if (TryParseNoteId(e.Name, out var id))
-            NoteFileChanged?.Invoke(id);
-    }
-
-    private void OnFileCreated(object sender, FileSystemEventArgs e)
-    {
-        if (_isSelfWriting) return;
-        if (TryParseNoteId(e.Name, out var id))
-            NoteFileCreated?.Invoke(id);
-    }
-
-    private void OnFileDeleted(object sender, FileSystemEventArgs e)
-    {
-        if (_isSelfWriting) return;
-        if (TryParseNoteId(e.Name, out var id))
-            NoteFileDeleted?.Invoke(id);
-    }
-
-    private void OnFileRenamed(object sender, RenamedEventArgs e)
-    {
-        if (_isSelfWriting) return;
-        // Treat rename-in as creation of the new name
-        if (TryParseNoteId(e.Name, out var id))
-            NoteFileCreated?.Invoke(id);
-    }
-
-    private void PollDirectory()
-    {
-        try
+        using (var clearOrder = connection.CreateCommand())
         {
-            var notesDir = GetNotesDirectory();
-            if (!Directory.Exists(notesDir)) return;
+            clearOrder.Transaction = transaction;
+            clearOrder.CommandText = "DELETE FROM note_order;";
+            await clearOrder.ExecuteNonQueryAsync();
+        }
 
-            var currentFiles = Directory.GetFiles(notesDir, "*.json");
-            var currentSet = new HashSet<Guid>();
+        foreach (var note in notes)
+        {
+            NormalizeItems(note);
+            NormalizeWindowBounds(note);
 
-            lock (_lock)
+            using (var insertNote = connection.CreateCommand())
             {
-                // Check for created or changed files
-                foreach (var file in currentFiles)
-                {
-                    var name = Path.GetFileNameWithoutExtension(file);
-                    if (!Guid.TryParse(name, out var id)) continue;
-                    currentSet.Add(id);
-                    FileState state;
-                    try
-                    {
-                        var info = new FileInfo(file);
-                        state = new FileState(info.LastWriteTimeUtc, info.Length);
-                    }
-                    catch { continue; }
+                insertNote.Transaction = transaction;
+                insertNote.CommandText = @"
+INSERT INTO notes (id, title, color, created_date, modified_date, window_x, window_y, window_width, window_height, is_pinned)
+VALUES ($id, $title, $color, $created_date, $modified_date, $window_x, $window_y, $window_width, $window_height, $is_pinned);";
+                insertNote.Parameters.AddWithValue("$id", note.Id.ToString());
+                insertNote.Parameters.AddWithValue("$title", note.Title ?? string.Empty);
+                insertNote.Parameters.AddWithValue("$color", note.Color ?? "#FFFFE680");
+                insertNote.Parameters.AddWithValue("$created_date", ToDb(note.CreatedDate));
+                insertNote.Parameters.AddWithValue("$modified_date", ToDb(note.ModifiedDate));
+                insertNote.Parameters.AddWithValue("$window_x", note.WindowX);
+                insertNote.Parameters.AddWithValue("$window_y", note.WindowY);
+                insertNote.Parameters.AddWithValue("$window_width", note.WindowWidth);
+                insertNote.Parameters.AddWithValue("$window_height", note.WindowHeight);
+                insertNote.Parameters.AddWithValue("$is_pinned", note.IsPinned ? 1 : 0);
+                await insertNote.ExecuteNonQueryAsync();
+            }
 
-                    if (_knownFileStates.TryGetValue(id, out var known))
-                    {
-                        if (state.LastWriteTimeUtc != known.LastWriteTimeUtc || state.Length != known.Length)
-                        {
-                            _knownFileStates[id] = state;
-                            if (!_isSelfWriting)
-                                NoteFileChanged?.Invoke(id);
-                        }
-                    }
-                    else
-                    {
-                        // New file
-                        _knownFileStates[id] = state;
-                        if (!_isSelfWriting)
-                            NoteFileCreated?.Invoke(id);
-                    }
-                }
-
-                // Check for deleted files
-                var knownIds = _knownFileStates.Keys.ToList();
-                foreach (var knownId in knownIds)
-                {
-                    if (!currentSet.Contains(knownId))
-                    {
-                        _knownFileStates.Remove(knownId);
-                        if (!_isSelfWriting)
-                            NoteFileDeleted?.Invoke(knownId);
-                    }
-                }
+            for (var i = 0; i < note.Items.Count; i++)
+            {
+                var item = note.Items[i];
+                using var insertItem = connection.CreateCommand();
+                insertItem.Transaction = transaction;
+                insertItem.CommandText = @"
+INSERT INTO note_items (
+    id, note_id, text, is_completed, is_heading, is_important, text_attachment,
+    due_date, is_alarm_dismissed, snooze_until, created_at_utc, updated_at_utc, deleted_at_utc, position
+) VALUES (
+    $id, $note_id, $text, $is_completed, $is_heading, $is_important, $text_attachment,
+    $due_date, $is_alarm_dismissed, $snooze_until, $created_at_utc, $updated_at_utc, $deleted_at_utc, $position
+);";
+                insertItem.Parameters.AddWithValue("$id", item.Id.ToString());
+                insertItem.Parameters.AddWithValue("$note_id", note.Id.ToString());
+                insertItem.Parameters.AddWithValue("$text", item.Text ?? string.Empty);
+                insertItem.Parameters.AddWithValue("$is_completed", item.IsCompleted ? 1 : 0);
+                insertItem.Parameters.AddWithValue("$is_heading", item.IsHeading ? 1 : 0);
+                insertItem.Parameters.AddWithValue("$is_important", item.IsImportant ? 1 : 0);
+                insertItem.Parameters.AddWithValue("$text_attachment", item.TextAttachment ?? string.Empty);
+                insertItem.Parameters.AddWithValue("$due_date", (object?)ToDb(item.DueDate) ?? DBNull.Value);
+                insertItem.Parameters.AddWithValue("$is_alarm_dismissed", item.IsAlarmDismissed ? 1 : 0);
+                insertItem.Parameters.AddWithValue("$snooze_until", (object?)ToDb(item.SnoozeUntil) ?? DBNull.Value);
+                insertItem.Parameters.AddWithValue("$created_at_utc", ToDb(item.CreatedAtUtc));
+                insertItem.Parameters.AddWithValue("$updated_at_utc", ToDb(item.UpdatedAtUtc));
+                insertItem.Parameters.AddWithValue("$deleted_at_utc", (object?)ToDb(item.DeletedAtUtc) ?? DBNull.Value);
+                insertItem.Parameters.AddWithValue("$position", i);
+                await insertItem.ExecuteNonQueryAsync();
             }
         }
-        catch
+
+        var orderSource = orderedIds.Count > 0 ? orderedIds : notes.Select(n => n.Id).ToList();
+        for (var i = 0; i < orderSource.Count; i++)
         {
-            // ignore polling errors
+            using var insert = connection.CreateCommand();
+            insert.Transaction = transaction;
+            insert.CommandText = "INSERT INTO note_order (id, note_id, sort_order) VALUES ($id, $note_id, $sort_order);";
+            insert.Parameters.AddWithValue("$id", orderSource[i].ToString());
+            insert.Parameters.AddWithValue("$note_id", orderSource[i].ToString());
+            insert.Parameters.AddWithValue("$sort_order", i);
+            await insert.ExecuteNonQueryAsync();
         }
+
+        transaction.Commit();
     }
 
-    private static bool TryParseNoteId(string? fileName, out Guid id)
+    public async Task MergeRemoteNotesAsync(IReadOnlyList<Note> remoteNotes, IReadOnlyList<Guid> remoteOrderIds)
     {
-        id = Guid.Empty;
-        if (string.IsNullOrEmpty(fileName)) return false;
-        var name = Path.GetFileNameWithoutExtension(fileName);
-        return Guid.TryParse(name, out id);
+        EnsureDatabaseInitialized();
+
+        var localNotes = await LoadAllNotesAsync();
+        var localById = localNotes.ToDictionary(n => n.Id, n => n);
+
+        var missing = new List<Note>();
+        foreach (var remote in remoteNotes)
+        {
+            if (!localById.ContainsKey(remote.Id))
+                missing.Add(remote);
+        }
+
+        if (missing.Count == 0)
+            return;
+
+        foreach (var note in missing)
+        {
+            await SaveNoteAsync(note);
+        }
+
+        var localOrder = localNotes.Select(n => n.Id).ToList();
+        foreach (var id in remoteOrderIds)
+        {
+            if (!localOrder.Contains(id))
+                localOrder.Add(id);
+        }
+
+        await SaveManifestAsync(localOrder);
     }
-
-    private readonly record struct FileState(DateTime LastWriteTimeUtc, long Length);
-
-    // ── Supabase direct-upload helpers ──────────────────────────────────────
-
-    private static readonly HttpClient SupabaseHttpClient = new();
 
     private bool IsSupabaseDevSyncEnabled()
     {
@@ -506,17 +911,16 @@ public class StorageService : IDisposable
         return !string.IsNullOrWhiteSpace(url) && !string.IsNullOrWhiteSpace(key);
     }
 
-    public async Task TryUpsertNoteToSupabaseAsync(Note note)
+    private async Task TryUpsertNoteToSupabaseAsync(Note note)
     {
         if (!IsSupabaseDevSyncEnabled()) return;
         try
         {
-            // Build JSON using JsonArray/JsonObject — AOT-safe, no reflection needed.
-            var payload = new JsonArray
+            var payload = new[]
             {
-                new JsonObject
+                new Dictionary<string, object?>
                 {
-                    ["id"] = note.Id.ToString(),
+                    ["id"] = note.Id,
                     ["title"] = note.Title ?? string.Empty,
                     ["color"] = note.Color ?? "#FFFFE680",
                     ["created_date"] = note.CreatedDate.ToString("O"),
@@ -528,176 +932,195 @@ public class StorageService : IDisposable
                     ["is_pinned"] = note.IsPinned
                 }
             };
-            await PostUpsertAsync("notes", payload.ToJsonString());
+
+            await PostUpsertAsync("notes", payload);
         }
         catch (Exception ex)
         {
-            var msg = $"Supabase note upsert failed: {ex.Message}";
-            System.Diagnostics.Debug.WriteLine($"[Supabase] {msg}");
-            SyncStatusChanged?.Invoke(msg);
+            var message = $"Supabase note upsert failed: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"[Supabase] {message}");
+            SyncStatusChanged?.Invoke(message);
         }
     }
 
-    public async Task TryUpsertNoteItemsToSupabaseAsync(Note note)
+    private async Task TryUpsertNoteItemsToSupabaseAsync(Note note)
     {
         if (!IsSupabaseDevSyncEnabled()) return;
         try
         {
-            var payload = new JsonArray();
+            var remoteItemIds = await GetRemoteNoteItemIdsAsync(note.Id);
+            var localItemIds = new HashSet<Guid>(note.Items.Select(i => i.Id));
+            foreach (var remoteItemId in remoteItemIds)
+            {
+                if (!localItemIds.Contains(remoteItemId))
+                    await DeleteAsync("note_items", remoteItemId);
+            }
+
+            var payload = new List<Dictionary<string, object?>>();
             for (var i = 0; i < note.Items.Count; i++)
             {
                 var item = note.Items[i];
-                var obj = new JsonObject
+                payload.Add(new Dictionary<string, object?>
                 {
-                    ["id"] = item.Id.ToString(),
-                    ["note_id"] = note.Id.ToString(),
+                    ["id"] = item.Id,
+                    ["note_id"] = note.Id,
                     ["text"] = item.Text ?? string.Empty,
                     ["is_completed"] = item.IsCompleted,
                     ["is_heading"] = item.IsHeading,
                     ["is_important"] = item.IsImportant,
                     ["text_attachment"] = item.TextAttachment ?? string.Empty,
+                    ["due_date"] = item.DueDate?.ToString("O"),
                     ["is_alarm_dismissed"] = item.IsAlarmDismissed,
+                    ["snooze_until"] = item.SnoozeUntil?.ToString("O"),
                     ["created_at_utc"] = item.CreatedAtUtc.ToString("O"),
                     ["updated_at_utc"] = item.UpdatedAtUtc.ToString("O"),
+                    ["deleted_at_utc"] = item.DeletedAtUtc?.ToString("O"),
                     ["position"] = i
-                };
-                if (item.DueDate.HasValue) obj["due_date"] = item.DueDate.Value.ToString("O");
-                if (item.SnoozeUntil.HasValue) obj["snooze_until"] = item.SnoozeUntil.Value.ToString("O");
-                if (item.DeletedAtUtc.HasValue) obj["deleted_at_utc"] = item.DeletedAtUtc.Value.ToString("O");
-                payload.Add(obj);
+                });
             }
+
             if (payload.Count > 0)
-                await PostUpsertAsync("note_items", payload.ToJsonString());
+                await PostUpsertAsync("note_items", payload);
         }
         catch (Exception ex)
         {
-            var msg = $"Supabase item upsert failed: {ex.Message}";
-            System.Diagnostics.Debug.WriteLine($"[Supabase] {msg}");
-            SyncStatusChanged?.Invoke(msg);
+            var message = $"Supabase item upsert failed: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"[Supabase] {message}");
+            SyncStatusChanged?.Invoke(message);
         }
     }
 
-    public async Task TryDeleteNoteFromSupabaseAsync(Guid noteId)
+    private async Task<List<Guid>> GetRemoteNoteItemIdsAsync(Guid noteId)
     {
-        if (!IsSupabaseDevSyncEnabled()) return;
-        try
-        {
-            var supabaseUrl = _settingsService.GetSupabaseUrl().TrimEnd('/');
-            var supabaseKey = _settingsService.GetSupabaseApiKey();
-
-            var req = new HttpRequestMessage(HttpMethod.Delete, $"{supabaseUrl}/rest/v1/note_items?note_id=eq.{noteId}");
-            req.Headers.TryAddWithoutValidation("apikey", supabaseKey);
-            req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {supabaseKey}");
-            req.Headers.TryAddWithoutValidation("Prefer", "return=minimal");
-            var resp = await SupabaseHttpClient.SendAsync(req);
-            resp.EnsureSuccessStatusCode();
-
-            var req2 = new HttpRequestMessage(HttpMethod.Delete, $"{supabaseUrl}/rest/v1/notes?id=eq.{noteId}");
-            req2.Headers.TryAddWithoutValidation("apikey", supabaseKey);
-            req2.Headers.TryAddWithoutValidation("Authorization", $"Bearer {supabaseKey}");
-            req2.Headers.TryAddWithoutValidation("Prefer", "return=minimal");
-            var resp2 = await SupabaseHttpClient.SendAsync(req2);
-            resp2.EnsureSuccessStatusCode();
-
-            SyncStatusChanged?.Invoke($"Supabase delete OK (note {noteId}).");
-        }
-        catch (Exception ex)
-        {
-            var msg = $"Supabase delete failed: {ex.Message}";
-            System.Diagnostics.Debug.WriteLine($"[Supabase] {msg}");
-            SyncStatusChanged?.Invoke(msg);
-        }
-    }
-
-    public async Task TryDeleteNoteItemFromSupabaseAsync(Guid itemId)
-    {
-        if (!IsSupabaseDevSyncEnabled()) return;
-        try
-        {
-            var supabaseUrl = _settingsService.GetSupabaseUrl().TrimEnd('/');
-            var supabaseKey = _settingsService.GetSupabaseApiKey();
-
-            var req = new HttpRequestMessage(HttpMethod.Delete, $"{supabaseUrl}/rest/v1/note_items?id=eq.{itemId}");
-            req.Headers.TryAddWithoutValidation("apikey", supabaseKey);
-            req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {supabaseKey}");
-            req.Headers.TryAddWithoutValidation("Prefer", "return=representation");
-            var resp = await SupabaseHttpClient.SendAsync(req);
-            if (!resp.IsSuccessStatusCode)
-            {
-                var body = await resp.Content.ReadAsStringAsync();
-                throw new InvalidOperationException($"HTTP {(int)resp.StatusCode} deleting item {itemId}: {body}");
-            }
-
-            var deletedBody = await resp.Content.ReadAsStringAsync();
-            if (!deletedBody.Contains(itemId.ToString(), StringComparison.OrdinalIgnoreCase))
-            {
-                // Hard delete did not affect a row (often RLS). Fall back to soft delete.
-                var patchReq = new HttpRequestMessage(new HttpMethod("PATCH"), $"{supabaseUrl}/rest/v1/note_items?id=eq.{itemId}");
-                patchReq.Headers.TryAddWithoutValidation("apikey", supabaseKey);
-                patchReq.Headers.TryAddWithoutValidation("Authorization", $"Bearer {supabaseKey}");
-                patchReq.Headers.TryAddWithoutValidation("Prefer", "return=representation");
-
-                var patchObj = new JsonObject
-                {
-                    ["deleted_at_utc"] = DateTime.UtcNow.ToString("O")
-                };
-                patchReq.Content = new StringContent(patchObj.ToJsonString(), Encoding.UTF8, "application/json");
-
-                var patchResp = await SupabaseHttpClient.SendAsync(patchReq);
-                if (!patchResp.IsSuccessStatusCode)
-                {
-                    var patchBody = await patchResp.Content.ReadAsStringAsync();
-                    throw new InvalidOperationException($"HTTP {(int)patchResp.StatusCode} soft-deleting item {itemId}: {patchBody}");
-                }
-
-                var patchedBody = await patchResp.Content.ReadAsStringAsync();
-                if (!patchedBody.Contains(itemId.ToString(), StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException($"No rows affected when deleting item {itemId}. Check Supabase RLS/policies.");
-            }
-
-            SyncStatusChanged?.Invoke($"Supabase delete OK (item {itemId}).");
-        }
-        catch (Exception ex)
-        {
-            var msg = $"Supabase item delete failed: {ex.Message}";
-            System.Diagnostics.Debug.WriteLine($"[Supabase] {msg}");
-            SyncStatusChanged?.Invoke(msg);
-            throw;
-        }
-    }
-
-    private async Task PostUpsertAsync(string table, string json)
-    {
-        var supabaseUrl = _settingsService.GetSupabaseUrl().TrimEnd('/');
+        var supabaseUrl = _settingsService.GetSupabaseUrl();
         var supabaseKey = _settingsService.GetSupabaseApiKey();
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
-        var req = new HttpRequestMessage(HttpMethod.Post, $"{supabaseUrl}/rest/v1/{table}");
-        req.Headers.TryAddWithoutValidation("apikey", supabaseKey);
-        req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {supabaseKey}");
-        req.Headers.TryAddWithoutValidation("Prefer", "resolution=merge-duplicates,return=minimal");
-        req.Content = content;
-        var resp = await SupabaseHttpClient.SendAsync(req);
-        resp.EnsureSuccessStatusCode();
+        var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"{supabaseUrl.TrimEnd('/')}/rest/v1/note_items?select=id&note_id=eq.{noteId}");
+        request.Headers.TryAddWithoutValidation("apikey", supabaseKey);
+        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {supabaseKey}");
+
+        var response = await HttpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        var json = await response.Content.ReadAsStringAsync();
+        var rows = JsonSerializer.Deserialize<List<SupabaseIdRow>>(json) ?? new List<SupabaseIdRow>();
+        var ids = new List<Guid>(rows.Count);
+        foreach (var row in rows)
+        {
+            if (row.Id != Guid.Empty)
+                ids.Add(row.Id);
+        }
+
+        return ids;
+    }
+
+    private sealed class SupabaseIdRow
+    {
+        [JsonPropertyName("id")]
+        public Guid Id { get; set; }
+    }
+
+    private async Task TryUpsertNoteOrderToSupabaseAsync(IList<Guid> noteIds)
+    {
+        if (!IsSupabaseDevSyncEnabled()) return;
+        try
+        {
+            var payload = new List<Dictionary<string, object?>>();
+            for (var i = 0; i < noteIds.Count; i++)
+            {
+                payload.Add(new Dictionary<string, object?>
+                {
+                    ["id"] = noteIds[i],
+                    ["note_id"] = noteIds[i],
+                    ["sort_order"] = i
+                });
+            }
+
+            if (payload.Count > 0)
+                await PostUpsertAsync("note_order", payload);
+        }
+        catch (Exception ex)
+        {
+            var message = $"Supabase order upsert failed: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"[Supabase] {message}");
+            SyncStatusChanged?.Invoke(message);
+        }
+    }
+
+    private async Task TryDeleteNoteFromSupabaseAsync(Guid id)
+    {
+        if (!IsSupabaseDevSyncEnabled()) return;
+        try
+        {
+            await DeleteAsync("notes", id);
+        }
+        catch (Exception ex)
+        {
+            var message = $"Supabase delete failed: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"[Supabase] {message}");
+            SyncStatusChanged?.Invoke(message);
+        }
+    }
+
+    private async Task PostUpsertAsync(string table, object payload)
+    {
+        var supabaseUrl = _settingsService.GetSupabaseUrl();
+        var supabaseKey = _settingsService.GetSupabaseApiKey();
+        var request = new HttpRequestMessage(HttpMethod.Post, $"{supabaseUrl.TrimEnd('/')}/rest/v1/{table}");
+        request.Headers.TryAddWithoutValidation("apikey", supabaseKey);
+        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {supabaseKey}");
+        request.Headers.TryAddWithoutValidation("Prefer", "resolution=merge-duplicates");
+        var json = JsonSerializer.Serialize(payload);
+        request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+        var response = await HttpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
         SyncStatusChanged?.Invoke($"Supabase upsert OK ({table}).");
     }
 
-    /// <summary>
-    /// Replaces all local notes with the given list (used by PowerSyncService on remote pull).
-    /// Saves each note to disk and updates the manifest.
-    /// </summary>
-    public async Task ReplaceAllNotesAsync(IReadOnlyList<Note> notes, IReadOnlyList<Guid> orderedIds)
+    private async Task DeleteAsync(string table, Guid id)
     {
-        foreach (var note in notes)
-        {
-            await SaveNoteAsync(note);
-        }
-        var ids = orderedIds.Count > 0 ? new List<Guid>(orderedIds) : notes.Select(n => n.Id).ToList();
-        await SaveManifestAsync(ids);
-        SyncStatusChanged?.Invoke($"Replaced local storage with {notes.Count} remote notes.");
+        var supabaseUrl = _settingsService.GetSupabaseUrl();
+        var supabaseKey = _settingsService.GetSupabaseApiKey();
+        var request = new HttpRequestMessage(HttpMethod.Delete, $"{supabaseUrl.TrimEnd('/')}/rest/v1/{table}?id=eq.{id}");
+        request.Headers.TryAddWithoutValidation("apikey", supabaseKey);
+        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {supabaseKey}");
+        var response = await HttpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        SyncStatusChanged?.Invoke($"Supabase delete OK ({table}).");
     }
 
-    public void Dispose()
+    private async Task LogPersistedTitleAsync(Guid id)
     {
-        StopWatching();
+        try
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT title FROM notes WHERE id = $id;";
+            command.Parameters.AddWithValue("$id", id.ToString());
+            var result = await command.ExecuteScalarAsync();
+            Console.WriteLine($"[Storage] Persisted title for {id}: '{result}'");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Storage] Persisted title read failed: {ex.Message}");
+        }
     }
+}
+
+public record NoteLockAcquireResult(
+    bool Acquired,
+    bool TakeoverRequested,
+    string? OwnerDeviceId,
+    string? OwnerDeviceName);
+
+public class NoteLockInfo
+{
+    public Guid NoteId { get; set; }
+    public string DeviceId { get; set; } = string.Empty;
+    public string DeviceName { get; set; } = string.Empty;
+    public DateTime LastHeartbeatUtc { get; set; }
+    public string? TakeoverRequestedByDeviceId { get; set; }
+    public string? TakeoverRequestedByDeviceName { get; set; }
+    public DateTime? TakeoverRequestedUtc { get; set; }
 }

@@ -328,6 +328,14 @@ private async void OnDueDateButtonClick(object? sender, RoutedEventArgs e)
     }
 }
 
+    private void OnDeleteButtonClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button button && button.DataContext is TodoItem item && DataContext is NoteViewModel vm)
+        {
+            vm.RemoveItemCommand.Execute(item);
+        }
+    }
+
     private void HideAllDropIndicators()
     {
         foreach (var desc in this.GetVisualDescendants())

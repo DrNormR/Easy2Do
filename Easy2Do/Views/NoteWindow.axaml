@@ -69,19 +69,24 @@
     <vm:NoteViewModel />
   </Design.DataContext>
 
-  <Grid RowDefinitions="Auto,Auto,*,Auto" Focusable="True" PointerPressed="OnBackgroundPointerPressed">
+  <Grid>
+    <Grid x:Name="EditorGrid"
+          RowDefinitions="Auto,Auto,*,Auto"
+          Focusable="True"
+          PointerPressed="OnBackgroundPointerPressed"
+          IsEnabled="{Binding IsEditable}">
     <!-- Title Section -->
     <Border Grid.Row="0" 
             Background="#33000000" 
             Padding="10,6"
             CornerRadius="5,5,0,0"
             Margin="8,8,8,3">
-        <Grid ColumnDefinitions="*,Auto,Auto">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto">
         <TextBox Grid.Column="0"
                  x:Name="TitleTextBox"
                  Classes="inline-editor"
                  Text="{Binding Note.Title, UpdateSourceTrigger=PropertyChanged}"
-                 FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
+                 FontFamily="{StaticResource BodyFontFamily}"
                  FontSize="16"
                  FontWeight="Normal"
                  Foreground="#FF222222"
@@ -93,7 +98,7 @@
         <!-- Pin Button -->
         <Button Grid.Column="1"
                 Command="{Binding TogglePinCommand}"
-                FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
+                FontFamily="{StaticResource EmojiFontFamily}"
                 FontSize="14"
                 Padding="4"
                 Background="Transparent"
@@ -105,10 +110,20 @@
                        IsVisible="{Binding Note.IsPinned}"/>
           </Panel>
         </Button>
+        <!-- Refresh Button -->
+        <Button Grid.Column="2"
+                Command="{Binding RefreshNoteCommand}"
+                Content="&#x21bb;"
+                FontSize="14"
+                Padding="4"
+                Background="Transparent"
+                BorderThickness="0"
+                ToolTip.Tip="Refresh Note"/>
+
         <!-- Color Picker Menu -->
-        <DropDownButton Grid.Column="2"
+        <DropDownButton Grid.Column="3"
                         Content="&#x1F3A8;"
-                        FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
+                        FontFamily="{StaticResource EmojiFontFamily}"
                         FontSize="14"
                         Padding="4"
                         Background="Transparent"
@@ -261,7 +276,7 @@
                       Grid.Column="1"
                       Width="20"
                       Content="&#x1F6A8;"
-                      FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
+                      FontFamily="{StaticResource EmojiFontFamily}"
                       HorizontalAlignment="Left"
                       Background="Transparent"
                       BorderThickness="0"
@@ -301,7 +316,7 @@
               <!-- Item Text with conditional styling -->
               <Grid Grid.Column="3">
                 <!-- Heading text -->
-                <TextBox Text="{Binding Text}"
+                <TextBox Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                          Classes="inline-editor"
                          FontSize="16"
                          TextWrapping="Wrap"
@@ -312,12 +327,12 @@
                          Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"
                          Padding="0"
                          MinHeight="0"
-                         FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
+                         FontFamily="{StaticResource BodyFontFamily}"
                          GotFocus="OnItemTextBoxGotFocus"
                          KeyDown="OnItemTextBoxKeyDown"/>
 
                 <!-- Show non-strikethrough text when not completed (non-heading) -->
-                <TextBox Text="{Binding Text}"
+                <TextBox Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                          Classes="inline-editor"
                          FontSize="12"
                          TextWrapping="Wrap"
@@ -325,7 +340,7 @@
                          FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"
                          Padding="0"
                          MinHeight="0"
-                         FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
+                         FontFamily="{StaticResource BodyFontFamily}"
                          GotFocus="OnItemTextBoxGotFocus"
                          KeyDown="OnItemTextBoxKeyDown">
                   <TextBox.Margin>
@@ -344,7 +359,7 @@
                 
                 <!-- Show strikethrough text when completed (non-heading) -->
                 <Grid>
-                  <TextBox Text="{Binding Text}"
+                  <TextBox Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                            Classes="inline-editor"
                            FontSize="12"
                            TextWrapping="Wrap"
@@ -353,7 +368,7 @@
                            Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"
                            Padding="0"
                            MinHeight="0"
-                           FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
+                           FontFamily="{StaticResource BodyFontFamily}"
                            GotFocus="OnItemTextBoxGotFocus"
                            KeyDown="OnItemTextBoxKeyDown">
                     <TextBox.IsVisible>
@@ -373,7 +388,7 @@
                              FontWeight="{Binding IsImportant, Converter={StaticResource ImportantFontWeight}}"
                              Margin="{Binding IsHeading, Converter={StaticResource HeadingTextIndent}}"
                              Padding="0"
-                             FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
+                             FontFamily="{StaticResource BodyFontFamily}"
                              Foreground="Transparent"
                              IsHitTestVisible="False">
                     <TextBlock.IsVisible>
@@ -400,7 +415,7 @@
                       Grid.Column="4"
                       Width="18"
                       Content="&#x1F4CE;"
-                      FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
+                      FontFamily="{StaticResource EmojiFontFamily}"
                       Background="Transparent"
                       BorderThickness="0"
                       FontSize="13"
@@ -427,7 +442,7 @@
         Grid.Column="5"
         Width="18"
         Content="&#x1F4C5;"
-        FontFamily="Inter, Segoe UI, Noto Sans, DejaVu Sans, sans-serif"
+        FontFamily="{StaticResource EmojiFontFamily}"
         Background="Transparent"
         BorderThickness="0"
         FontSize="13"
@@ -450,27 +465,17 @@
 </Button>
 
 <!-- Delete Button -->
-<Button Grid.Column="6"
-                      Width="18"
-                      Content="X"
-                      Command="{Binding $parent[ItemsControl].DataContext.RemoveItemCommand}"
-                      CommandParameter="{Binding}"
-                      Background="Transparent"
-                      BorderThickness="0"
-                      FontSize="11"
-                      Padding="0"
-                      Margin="3,0,14,0"
-                      Foreground="#D32F2F">
-                <Button.Opacity>
-                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
-                    <Binding Path="#ItemRow.IsPointerOver" />
-                  </MultiBinding>
-                </Button.Opacity>
-                <Button.IsHitTestVisible>
-                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
-                    <Binding Path="#ItemRow.IsPointerOver" />
-                  </MultiBinding>
-                </Button.IsHitTestVisible>
+               <Button Grid.Column="6"
+                       Width="18"
+                       Content="X"
+                       Click="OnDeleteButtonClick"
+                       Background="Transparent"
+                       BorderThickness="0"
+                       FontSize="11"
+                       Padding="0"
+                       Margin="3,0,14,0"
+                       Foreground="#D32F2F"
+                       IsVisible="{Binding #ItemRow.IsPointerOver}">
               </Button>
             </Grid>
           </DataTemplate>
@@ -518,6 +523,34 @@
                 CornerRadius="3"
                 FontSize="14"/>
       </Grid>
+    </Border>
+    </Grid>
+
+    <Border IsVisible="{Binding IsLocked}"
+            Background="#AA111111"
+            Margin="10"
+            CornerRadius="8"
+            Padding="14"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Top">
+      <StackPanel Spacing="10">
+        <TextBlock Text="{Binding LockMessage}"
+                   Foreground="White"
+                   FontSize="14"
+                   TextWrapping="Wrap"/>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="Take Over"
+                  Click="OnTakeOverClick"
+                  Background="#FF4CAF50"
+                  Foreground="White"
+                  Padding="12,6"/>
+          <Button Content="Refresh Lock"
+                  Click="OnRefreshLockClick"
+                  Background="#FF757575"
+                  Foreground="White"
+                  Padding="12,6"/>
+        </StackPanel>
+      </StackPanel>
     </Border>
   </Grid>
 </Window>

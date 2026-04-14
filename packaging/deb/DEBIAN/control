@@ -1,0 +1,9 @@
+Package: easy2do
+Version: 2.2
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: DrNormR
+Description: Easy2Do sticky note to-do app
+ Cross-platform Avalonia desktop notes application with local SQLite
+ persistence and optional sync integration.

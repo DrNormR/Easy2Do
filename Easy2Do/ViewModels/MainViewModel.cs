@@ -11,7 +11,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Easy2Do.Models;
 using Easy2Do.Views;
-using System.Collections.Specialized;
 
 namespace Easy2Do.ViewModels;
 
@@ -47,8 +46,7 @@ public partial class MainViewModel : ViewModelBase
 
     private bool _isLoading;
     private readonly Dictionary<Guid, CancellationTokenSource> _saveCtsMap = new();
-    private readonly object _saveMapLock = new();
-    private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(1200);
 
     public MainViewModel()
     {
@@ -76,40 +74,111 @@ public partial class MainViewModel : ViewModelBase
             await App.StorageService.MigrateIfNeededAsync();
             var loadedNotes = await App.StorageService.LoadAllNotesAsync();
             System.Diagnostics.Debug.WriteLine($"LoadNotesAsync: loaded {loadedNotes.Count} notes.");
-
-            var existingById = Notes.ToDictionary(n => n.Id, n => n);
-            var nextNotes = new List<Note>(loadedNotes.Count);
-            var loadedIds = new HashSet<Guid>();
-
-            foreach (var note in loadedNotes)
-            {
-                System.Diagnostics.Debug.WriteLine($"Loaded note: {note.Id} - {note.Title}");
-                loadedIds.Add(note.Id);
-
-                if (existingById.TryGetValue(note.Id, out var existing))
-                {
-                    ApplyNoteSnapshot(existing, note);
-                    nextNotes.Add(existing);
-                }
-                else
-                {
-                    SubscribeNote(note);
-                    nextNotes.Add(note);
-                }
-            }
-
-            foreach (var stale in Notes.Where(n => !loadedIds.Contains(n.Id)).ToList())
-            {
-                UnsubscribeNote(stale);
-            }
-
-            Notes.Clear();
-            foreach (var n in nextNotes)
-                Notes.Add(n);
+            ApplyLoadedNotes(loadedNotes);
         }
         finally
         {
             _isLoading = false;
+        }
+    }
+
+    private void ApplyLoadedNotes(IReadOnlyList<Note> loadedNotes)
+    {
+        var existingById = Notes.ToDictionary(n => n.Id, n => n);
+        var loadedIds = new HashSet<Guid>();
+
+        foreach (var note in loadedNotes)
+        {
+            loadedIds.Add(note.Id);
+            System.Diagnostics.Debug.WriteLine($"Loaded note: {note.Id} - {note.Title}");
+
+            if (existingById.TryGetValue(note.Id, out var existing))
+            {
+                UpdateExistingNote(existing, note);
+                continue;
+            }
+
+            SubscribeNote(note);
+            Notes.Add(note);
+        }
+
+        var toRemove = Notes.Where(n => !loadedIds.Contains(n.Id)).ToList();
+        foreach (var note in toRemove)
+        {
+            UnsubscribeNote(note);
+            Notes.Remove(note);
+            if (SelectedNote?.Id == note.Id)
+                SelectedNote = null;
+        }
+    }
+
+    private void UpdateExistingNote(Note target, Note incoming)
+    {
+        target.IsReloading = true;
+        try
+        {
+            target.Title = incoming.Title;
+            target.Color = incoming.Color;
+            target.CreatedDate = incoming.CreatedDate;
+            target.ModifiedDate = incoming.ModifiedDate;
+            target.WindowX = incoming.WindowX;
+            target.WindowY = incoming.WindowY;
+            target.WindowWidth = incoming.WindowWidth;
+            target.WindowHeight = incoming.WindowHeight;
+            target.IsPinned = incoming.IsPinned;
+
+            ApplyItems(target, incoming);
+        }
+        finally
+        {
+            target.IsReloading = false;
+        }
+    }
+
+    private void ApplyItems(Note target, Note incoming)
+    {
+        var existingItems = target.Items.ToList();
+        var existingById = existingItems.ToDictionary(i => i.Id, i => i);
+        var desired = new List<TodoItem>();
+        var incomingIds = new HashSet<Guid>();
+
+        foreach (var incomingItem in incoming.Items)
+        {
+            incomingIds.Add(incomingItem.Id);
+            if (existingById.TryGetValue(incomingItem.Id, out var existing))
+            {
+                existing.Text = incomingItem.Text;
+                existing.IsCompleted = incomingItem.IsCompleted;
+                existing.IsHeading = incomingItem.IsHeading;
+                existing.IsImportant = incomingItem.IsImportant;
+                existing.TextAttachment = incomingItem.TextAttachment;
+                existing.DueDate = incomingItem.DueDate;
+                existing.IsAlarmDismissed = incomingItem.IsAlarmDismissed;
+                existing.SnoozeUntil = incomingItem.SnoozeUntil;
+                existing.CreatedAtUtc = incomingItem.CreatedAtUtc;
+                existing.UpdatedAtUtc = incomingItem.UpdatedAtUtc;
+                existing.DeletedAtUtc = incomingItem.DeletedAtUtc;
+                desired.Add(existing);
+            }
+            else
+            {
+                desired.Add(incomingItem);
+            }
+        }
+
+        // Preserve local-only items that are not present in the incoming snapshot.
+        // This prevents freshly added local items from being dropped during a remote refresh
+        // before they have been observed remotely.
+        foreach (var localItem in existingItems)
+        {
+            if (!incomingIds.Contains(localItem.Id))
+                desired.Add(localItem);
+        }
+
+        target.Items.Clear();
+        foreach (var item in desired)
+        {
+            target.Items.Add(item);
         }
     }
 
@@ -167,6 +236,8 @@ public partial class MainViewModel : ViewModelBase
     private void OnItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (sender is not TodoItem item) return;
+        if (e.PropertyName is nameof(TodoItem.UpdatedAtUtc) or nameof(TodoItem.CreatedAtUtc) or nameof(TodoItem.DeletedAtUtc) or nameof(TodoItem.Id))
+            return;
         var note = Notes.FirstOrDefault(n => n.Items.Contains(item));
         if (note is null) return;
         if (note.IsReloading) return;
@@ -181,29 +252,25 @@ public partial class MainViewModel : ViewModelBase
     {
         if (_isLoading) return;
 
-        CancellationTokenSource cts;
-        lock (_saveMapLock)
-        {
-            if (_saveCtsMap.TryGetValue(note.Id, out var oldCts))
-                oldCts.Cancel();
+        // Cancel any pending debounce for this note
+        if (_saveCtsMap.TryGetValue(note.Id, out var oldCts))
+            oldCts.Cancel();
 
-            cts = new CancellationTokenSource();
-            _saveCtsMap[note.Id] = cts;
-        }
+        var cts = new CancellationTokenSource();
+        _saveCtsMap[note.Id] = cts;
 
-        _ = DebouncedSaveNoteAsync(note, cts);
+        _ = DebouncedSaveNoteAsync(note, cts.Token);
     }
 
-    private async Task DebouncedSaveNoteAsync(Note note, CancellationTokenSource cts)
+    private async Task DebouncedSaveNoteAsync(Note note, CancellationToken token)
     {
         try
         {
-            await Task.Delay(DebounceDelay, cts.Token);
+            System.Diagnostics.Debug.WriteLine($"[Save] Debounce start {note.Id} '{note.Title}'");
+            await Task.Delay(DebounceDelay, token);
             await App.StorageService.SaveNoteAsync(note);
             await SaveManifestAsync();
-            // Upload to Supabase if sync is enabled
-            _ = App.StorageService.TryUpsertNoteToSupabaseAsync(note);
-            _ = App.StorageService.TryUpsertNoteItemsToSupabaseAsync(note);
+            System.Diagnostics.Debug.WriteLine($"[Save] Debounce done {note.Id} '{note.Title}'");
         }
         catch (TaskCanceledException) { }
         catch (InvalidOperationException ex)
@@ -211,14 +278,6 @@ public partial class MainViewModel : ViewModelBase
             // Version conflict detected
             await ShowConflictMessageAsync(note, ex.Message);
             await ReloadNoteFromDiskAsync(note.Id);
-        }
-        finally
-        {
-            lock (_saveMapLock)
-            {
-                if (_saveCtsMap.TryGetValue(note.Id, out var current) && ReferenceEquals(current, cts))
-                    _saveCtsMap.Remove(note.Id);
-            }
         }
     }
 
@@ -236,10 +295,6 @@ public partial class MainViewModel : ViewModelBase
 
     private void OnExternalNoteChanged(Guid id)
     {
-        // Avoid clobbering while this exact note still has a pending local debounced save.
-        if (HasPendingSave(id))
-            return;
-
         Dispatcher.UIThread.Post(() => _ = ReloadNoteFromDiskAsync(id));
     }
 
@@ -279,7 +334,27 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             var old = Notes[index];
-            ApplyNoteSnapshot(old, freshNote);
+            UnsubscribeNote(old);
+
+            // Copy data into the existing Note so open NoteWindows stay connected
+            old.Title = freshNote.Title;
+            old.Color = freshNote.Color;
+            old.CreatedDate = freshNote.CreatedDate;
+            old.ModifiedDate = freshNote.ModifiedDate;
+            old.LastWriteTimeUtc = freshNote.LastWriteTimeUtc;
+            old.WindowX = freshNote.WindowX;
+            old.WindowY = freshNote.WindowY;
+            old.WindowWidth = freshNote.WindowWidth;
+            old.WindowHeight = freshNote.WindowHeight;
+
+            // Replace items
+            foreach (var item in old.Items)
+                item.PropertyChanged -= OnItemPropertyChanged;
+            old.Items.Clear();
+            foreach (var item in freshNote.Items)
+                old.Items.Add(item);
+
+            SubscribeNote(old);
         }
         finally
         {
@@ -289,47 +364,10 @@ public partial class MainViewModel : ViewModelBase
 
     public void CancelPendingSave(Guid noteId)
     {
-        lock (_saveMapLock)
+        if (_saveCtsMap.TryGetValue(noteId, out var cts))
         {
-            if (_saveCtsMap.TryGetValue(noteId, out var cts))
-            {
-                cts.Cancel();
-                _saveCtsMap.Remove(noteId);
-            }
-        }
-    }
-
-    private bool HasPendingSave(Guid noteId)
-    {
-        lock (_saveMapLock)
-        {
-            return _saveCtsMap.TryGetValue(noteId, out var cts) && !cts.IsCancellationRequested;
-        }
-    }
-
-    private static void ApplyNoteSnapshot(Note target, Note source)
-    {
-        target.IsReloading = true;
-        try
-        {
-            target.Title = source.Title;
-            target.Color = source.Color;
-            target.CreatedDate = source.CreatedDate;
-            target.ModifiedDate = source.ModifiedDate;
-            target.LastWriteTimeUtc = source.LastWriteTimeUtc;
-            target.IsPinned = source.IsPinned;
-            target.WindowX = source.WindowX;
-            target.WindowY = source.WindowY;
-            target.WindowWidth = source.WindowWidth;
-            target.WindowHeight = source.WindowHeight;
-
-            target.Items.Clear();
-            foreach (var item in source.Items)
-                target.Items.Add(item);
-        }
-        finally
-        {
-            target.IsReloading = false;
+            cts.Cancel();
+            _saveCtsMap.Remove(noteId);
         }
     }
 
@@ -381,7 +419,6 @@ public partial class MainViewModel : ViewModelBase
             Notes.Remove(note);
             await App.StorageService.DeleteNoteFileAsync(note.Id);
             await SaveManifestAsync();
-            _ = App.StorageService.TryDeleteNoteFromSupabaseAsync(note.Id);
         }
     }
 
@@ -486,6 +523,15 @@ public partial class MainViewModel : ViewModelBase
                 await dlg.ShowDialog(window);
             }
         });
+    }
+
+    public async Task FlushNoteAsync(Guid noteId)
+    {
+        var note = Notes.FirstOrDefault(n => n.Id == noteId);
+        if (note == null) return;
+        CancelPendingSave(noteId);
+        await App.StorageService.SaveNoteAsync(note);
+        await SaveManifestAsync();
     }
 }
 
