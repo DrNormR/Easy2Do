@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Easy2Do.Models;
 using Microsoft.Data.Sqlite;
@@ -947,6 +948,14 @@ INSERT INTO note_items (
         if (!IsSupabaseDevSyncEnabled()) return;
         try
         {
+            var remoteItemIds = await GetRemoteNoteItemIdsAsync(note.Id);
+            var localItemIds = new HashSet<Guid>(note.Items.Select(i => i.Id));
+            foreach (var remoteItemId in remoteItemIds)
+            {
+                if (!localItemIds.Contains(remoteItemId))
+                    await DeleteAsync("note_items", remoteItemId);
+            }
+
             var payload = new List<Dictionary<string, object?>>();
             for (var i = 0; i < note.Items.Count; i++)
             {
@@ -979,6 +988,37 @@ INSERT INTO note_items (
             System.Diagnostics.Debug.WriteLine($"[Supabase] {message}");
             SyncStatusChanged?.Invoke(message);
         }
+    }
+
+    private async Task<List<Guid>> GetRemoteNoteItemIdsAsync(Guid noteId)
+    {
+        var supabaseUrl = _settingsService.GetSupabaseUrl();
+        var supabaseKey = _settingsService.GetSupabaseApiKey();
+        var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"{supabaseUrl.TrimEnd('/')}/rest/v1/note_items?select=id&note_id=eq.{noteId}");
+        request.Headers.TryAddWithoutValidation("apikey", supabaseKey);
+        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {supabaseKey}");
+
+        var response = await HttpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        var json = await response.Content.ReadAsStringAsync();
+        var rows = JsonSerializer.Deserialize<List<SupabaseIdRow>>(json) ?? new List<SupabaseIdRow>();
+        var ids = new List<Guid>(rows.Count);
+        foreach (var row in rows)
+        {
+            if (row.Id != Guid.Empty)
+                ids.Add(row.Id);
+        }
+
+        return ids;
+    }
+
+    private sealed class SupabaseIdRow
+    {
+        [JsonPropertyName("id")]
+        public Guid Id { get; set; }
     }
 
     private async Task TryUpsertNoteOrderToSupabaseAsync(IList<Guid> noteIds)

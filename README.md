@@ -10,7 +10,7 @@ A simple and elegant to-do list application built with Avalonia UI for .NET 8.
 - **Duplicate Note**: Copy an existing note with all its items
 - **Settings Menu**: Access application settings and information
 - **Notes List**: View all your notes with item counts and modification dates
-- **Persistent Storage**: All notes are automatically saved and loaded between sessions
+- **Persistent Storage**: All notes are automatically saved to SQLite and loaded between sessions
 
 ### Sticky Notes (Note Window)
 - **Custom Titles**: Give each note a descriptive title
@@ -37,10 +37,12 @@ A simple and elegant to-do list application built with Avalonia UI for .NET 8.
 
 ## Data Storage
 
-- Notes are stored in **JSON format** for easy backup and portability
-- Default storage location: `Documents/Easy2Do/notes.json`
+- Notes are stored in **SQLite** for fast local persistence
+- Database file: `{StorageLocation}/easy2do.db`
+- Default storage location: `Documents/Easy2Do/`
 - Application settings: `%LocalAppData%/Easy2Do/settings.json`
 - **Auto-Save**: All changes are saved automatically - no need to manually save!
+- Legacy JSON import is supported for one-time migration
 - Notes persist between application sessions
 
 ## How to Use
@@ -55,9 +57,13 @@ A simple and elegant to-do list application built with Avalonia UI for .NET 8.
 6. **Organize your notes** - Use Duplicate to copy notes, Delete to remove them
 7. **Access settings** - Click the "Settings" button
 8. **Change storage location** (optional):
-   - Go to Settings
-   - Click "Browse..." to select a new folder
-   - Click "Open Folder" to view your notes JSON file
+    - Go to Settings
+    - Click "Browse..." to select a new folder
+    - Click "Open Folder" to view your `easy2do.db` file
+9. **Configure sync** (optional):
+   - Enable sync in Settings
+   - Provide PowerSync URL and either Dev Token or Backend URL
+   - Click reconnect to initialize syncing
 
 ## Technical Details
 
@@ -70,22 +76,24 @@ A simple and elegant to-do list application built with Avalonia UI for .NET 8.
 
 ```
 Easy2Do/
-??? Models/
-?   ??? Note.cs              # Note data model
-?   ??? TodoItem.cs          # Todo item data model
-??? ViewModels/
-?   ??? MainViewModel.cs     # Main window logic
-?   ??? NoteViewModel.cs     # Sticky note logic
-?   ??? SettingsViewModel.cs # Settings logic
-?   ??? AboutViewModel.cs    # About page logic
-??? Views/
-?   ??? MainView.axaml       # Main window UI
-?   ??? NoteWindow.axaml     # Sticky note UI
-?   ??? SettingsWindow.axaml # Settings UI
-?   ??? AboutView.axaml      # About page UI
-??? Services/
-    ??? StorageService.cs    # JSON persistence
-    ??? SettingsService.cs   # App settings management
+|-- Models/
+|   |-- Note.cs               # Note data model
+|   `-- TodoItem.cs           # Todo item data model
+|-- ViewModels/
+|   |-- MainViewModel.cs      # Main window logic
+|   |-- NoteViewModel.cs      # Sticky note logic
+|   |-- SettingsViewModel.cs  # Settings logic
+|   `-- AboutViewModel.cs     # About page logic
+|-- Views/
+|   |-- MainView.axaml        # Main window UI
+|   |-- NoteWindow.axaml      # Sticky note UI
+|   |-- SettingsWindow.axaml  # Settings UI
+|   `-- AboutView.axaml       # About page UI
+`-- Services/
+    |-- StorageService.cs     # SQLite persistence
+    |-- SettingsService.cs    # App settings management
+    |-- PowerSyncService.cs   # PowerSync initialization
+    `-- PowerSyncConnector.cs # Sync token/upload connector
 ```
 
 ## Future Enhancement Ideas
@@ -100,4 +108,4 @@ Easy2Do/
 
 ## License
 
-© 2025 Easy2Do. All rights reserved.
+Copyright (c) 2025 Easy2Do. All rights reserved.

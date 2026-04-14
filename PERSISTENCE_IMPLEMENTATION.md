@@ -160,6 +160,25 @@ Added new functionality:
 - Cloud sync integration
 - Backup/restore features
 
+## Item Delete Sync Hotfix (Stage 3)
+
+### Issue
+- Some deleted checklist items could reappear 5-30 seconds later.
+- Repro pattern: delete an existing item, then it returns after the next sync refresh.
+
+### Root Cause
+- Local delete removed the item from SQLite when saving the note.
+- Remote sync logic only upserted current items and did not delete removed `note_items` rows in Supabase.
+- The periodic remote refresh then replaced local data with the remote snapshot, which still contained the deleted row.
+
+### Fix Implemented
+- Updated `StorageService.TryUpsertNoteItemsToSupabaseAsync()` to diff local item IDs vs remote item IDs for the note.
+- Added remote cleanup for missing IDs using `DELETE /rest/v1/note_items?id=eq.{id}`.
+- Kept existing upsert behavior for current local items.
+
+### Result
+- Deletions now persist across refresh cycles and no longer respawn after sync.
+
 ## Supabase Setup Notes (Stage 3)
 
 ### Tables (Postgres)
