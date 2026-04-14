@@ -28,6 +28,22 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private Note? _selectedNote;
 
+    [ObservableProperty]
+    private ViewModelBase? _activeDetailViewModel;
+
+    public bool HasActiveDetail => ActiveDetailViewModel != null;
+
+    partial void OnActiveDetailViewModelChanged(ViewModelBase? value)
+    {
+        OnPropertyChanged(nameof(HasActiveDetail));
+    }
+
+    [RelayCommand]
+    private void CloseDetail()
+    {
+        ActiveDetailViewModel = null;
+    }
+
     private bool _isLoading;
     private readonly Dictionary<Guid, CancellationTokenSource> _saveCtsMap = new();
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(1200);
@@ -121,11 +137,14 @@ public partial class MainViewModel : ViewModelBase
 
     private void ApplyItems(Note target, Note incoming)
     {
-        var existingById = target.Items.ToDictionary(i => i.Id, i => i);
+        var existingItems = target.Items.ToList();
+        var existingById = existingItems.ToDictionary(i => i.Id, i => i);
         var desired = new List<TodoItem>();
+        var incomingIds = new HashSet<Guid>();
 
         foreach (var incomingItem in incoming.Items)
         {
+            incomingIds.Add(incomingItem.Id);
             if (existingById.TryGetValue(incomingItem.Id, out var existing))
             {
                 existing.Text = incomingItem.Text;
@@ -145,6 +164,15 @@ public partial class MainViewModel : ViewModelBase
             {
                 desired.Add(incomingItem);
             }
+        }
+
+        // Preserve local-only items that are not present in the incoming snapshot.
+        // This prevents freshly added local items from being dropped during a remote refresh
+        // before they have been observed remotely.
+        foreach (var localItem in existingItems)
+        {
+            if (!incomingIds.Contains(localItem.Id))
+                desired.Add(localItem);
         }
 
         target.Items.Clear();
@@ -427,30 +455,36 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private void OpenNote(Note? note)
     {
-        if (note == null) return;
-        var noteViewModel = new NoteViewModel(note);
-        var noteWindow = new NoteWindow
+        if (note != null)
         {
-            DataContext = noteViewModel
-        };
-        noteWindow.Show();
+            var noteViewModel = new NoteViewModel(note);
+            if (OperatingSystem.IsIOS() || OperatingSystem.IsAndroid())
+            {
+                ActiveDetailViewModel = noteViewModel;
+            }
+            else
+            {
+                var noteWindow = new NoteWindow { DataContext = noteViewModel };
+                noteWindow.Show();
+            }
+        }
     }
 
     [RelayCommand]
     private void OpenSettings()
     {
         var settingsViewModel = new SettingsViewModel();
-        var settingsWindow = new SettingsWindow
+        if (OperatingSystem.IsIOS() || OperatingSystem.IsAndroid())
         {
-            DataContext = settingsViewModel
-        };
-        if (App.MainWindow != null)
-        {
-            settingsWindow.ShowDialog(App.MainWindow);
+            ActiveDetailViewModel = settingsViewModel;
         }
         else
         {
-            settingsWindow.Show();
+            var settingsWindow = new SettingsWindow { DataContext = settingsViewModel };
+            if (App.MainWindow != null)
+                settingsWindow.ShowDialog(App.MainWindow);
+            else
+                settingsWindow.Show();
         }
     }
 

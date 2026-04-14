@@ -466,26 +466,16 @@
 
 <!-- Delete Button -->
 <Button Grid.Column="6"
-                      Width="18"
-                      Content="X"
-                      Command="{Binding $parent[ItemsControl].DataContext.RemoveItemCommand}"
-                      CommandParameter="{Binding}"
-                      Background="Transparent"
-                      BorderThickness="0"
-                      FontSize="11"
-                      Padding="0"
-                      Margin="3,0,14,0"
-                      Foreground="#D32F2F">
-                <Button.Opacity>
-                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
-                    <Binding Path="#ItemRow.IsPointerOver" />
-                  </MultiBinding>
-                </Button.Opacity>
-                <Button.IsHitTestVisible>
-                  <MultiBinding Converter="{StaticResource BoolOrConverter}">
-                    <Binding Path="#ItemRow.IsPointerOver" />
-                  </MultiBinding>
-                </Button.IsHitTestVisible>
+                       Width="18"
+                       Content="X"
+                       Click="OnDeleteButtonClick"
+                       Background="Transparent"
+                       BorderThickness="0"
+                       FontSize="11"
+                       Padding="0"
+                       Margin="3,0,14,0"
+                       Foreground="#D32F2F">
+                <Button.Opacity>0.9</Button.Opacity>
               </Button>
             </Grid>
           </DataTemplate>
