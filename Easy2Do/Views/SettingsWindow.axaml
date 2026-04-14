@@ -8,6 +8,7 @@
         x:Class="Easy2Do.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="Settings"
+        RequestedThemeVariant="Light"
         Width="550" Height="550"
         WindowStartupLocation="CenterOwner"
         CanResize="False">
@@ -91,6 +92,7 @@
                      FontWeight="SemiBold"/>
 
           <CheckBox Content="Enable sync"
+                    Foreground="#FF222222"
                     IsChecked="{Binding SyncEnabled}"/>
 
           <TextBlock Text="PowerSync URL"
