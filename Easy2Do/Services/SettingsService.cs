@@ -124,6 +124,11 @@ public class SettingsService
 
     public string GetSupabaseApiKey() => _settings.SupabaseApiKey;
     public void SetSupabaseApiKey(string key) { _settings.SupabaseApiKey = key?.Trim() ?? string.Empty; SaveSettings(); }
+
+    public string GetDeviceName()
+    {
+        return Environment.MachineName;
+    }
 }
 
 public class AppSettings

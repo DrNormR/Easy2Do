@@ -336,6 +336,18 @@ private async void OnDueDateButtonClick(object? sender, RoutedEventArgs e)
         }
     }
 
+    private void OnTakeOverClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is NoteViewModel vm)
+            vm.SetLockState(false, null);
+    }
+
+    private void OnRefreshLockClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is NoteViewModel vm)
+            vm.SetLockState(false, null);
+    }
+
     private void HideAllDropIndicators()
     {
         foreach (var desc in this.GetVisualDescendants())

@@ -252,22 +252,27 @@ public partial class MainViewModel : ViewModelBase
     {
         if (_isLoading) return;
 
-        // Cancel any pending debounce for this note
-        if (_saveCtsMap.TryGetValue(note.Id, out var oldCts))
-            oldCts.Cancel();
-
+        CancellationTokenSource? oldCts = null;
         var cts = new CancellationTokenSource();
-        _saveCtsMap[note.Id] = cts;
 
-        _ = DebouncedSaveNoteAsync(note, cts.Token);
+        lock (_saveCtsMap)
+        {
+            // Cancel any pending debounce for this note
+            if (_saveCtsMap.TryGetValue(note.Id, out oldCts))
+                oldCts.Cancel();
+
+            _saveCtsMap[note.Id] = cts;
+        }
+
+        _ = DebouncedSaveNoteAsync(note, cts);
     }
 
-    private async Task DebouncedSaveNoteAsync(Note note, CancellationToken token)
+    private async Task DebouncedSaveNoteAsync(Note note, CancellationTokenSource cts)
     {
         try
         {
             System.Diagnostics.Debug.WriteLine($"[Save] Debounce start {note.Id} '{note.Title}'");
-            await Task.Delay(DebounceDelay, token);
+            await Task.Delay(DebounceDelay, cts.Token);
             await App.StorageService.SaveNoteAsync(note);
             await SaveManifestAsync();
             System.Diagnostics.Debug.WriteLine($"[Save] Debounce done {note.Id} '{note.Title}'");
@@ -278,6 +283,14 @@ public partial class MainViewModel : ViewModelBase
             // Version conflict detected
             await ShowConflictMessageAsync(note, ex.Message);
             await ReloadNoteFromDiskAsync(note.Id);
+        }
+        finally
+        {
+            lock (_saveCtsMap)
+            {
+                if (_saveCtsMap.TryGetValue(note.Id, out var currentCts) && ReferenceEquals(currentCts, cts))
+                    _saveCtsMap.Remove(note.Id);
+            }
         }
     }
 
@@ -364,10 +377,13 @@ public partial class MainViewModel : ViewModelBase
 
     public void CancelPendingSave(Guid noteId)
     {
-        if (_saveCtsMap.TryGetValue(noteId, out var cts))
+        lock (_saveCtsMap)
         {
-            cts.Cancel();
-            _saveCtsMap.Remove(noteId);
+            if (_saveCtsMap.TryGetValue(noteId, out var cts))
+            {
+                cts.Cancel();
+                _saveCtsMap.Remove(noteId);
+            }
         }
     }
 
@@ -531,6 +547,30 @@ public partial class MainViewModel : ViewModelBase
         if (note == null) return;
         CancelPendingSave(noteId);
         await App.StorageService.SaveNoteAsync(note);
+        await SaveManifestAsync();
+    }
+
+    public async Task FlushAllPendingSavesAsync()
+    {
+        List<Guid> pendingIds;
+        lock (_saveCtsMap)
+        {
+            pendingIds = _saveCtsMap.Keys.ToList();
+        }
+
+        if (pendingIds.Count == 0)
+            return;
+
+        foreach (var noteId in pendingIds)
+            CancelPendingSave(noteId);
+
+        foreach (var noteId in pendingIds)
+        {
+            var note = Notes.FirstOrDefault(n => n.Id == noteId);
+            if (note != null)
+                await App.StorageService.SaveNoteAsync(note);
+        }
+
         await SaveManifestAsync();
     }
 }

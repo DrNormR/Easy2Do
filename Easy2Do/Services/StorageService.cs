@@ -626,6 +626,49 @@ ON CONFLICT(id) DO NOTHING;";
         await TryDeleteNoteFromSupabaseAsync(id);
     }
 
+    public async Task TryDeleteNoteItemFromSupabaseAsync(Guid itemId)
+    {
+        if (!IsSupabaseDevSyncEnabled()) return;
+
+        try
+        {
+            await DeleteAsync("note_items", itemId);
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                var supabaseUrl = _settingsService.GetSupabaseUrl();
+                var supabaseKey = _settingsService.GetSupabaseApiKey();
+                var request = new HttpRequestMessage(
+                    HttpMethod.Patch,
+                    $"{supabaseUrl.TrimEnd('/')}/rest/v1/note_items?id=eq.{itemId}");
+                request.Headers.TryAddWithoutValidation("apikey", supabaseKey);
+                request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {supabaseKey}");
+                request.Headers.TryAddWithoutValidation("Prefer", "return=representation");
+
+                var payload = new Dictionary<string, object?>
+                {
+                    ["deleted_at_utc"] = DateTime.UtcNow.ToString("O")
+                };
+
+                request.Content = new StringContent(
+                    JsonSerializer.Serialize(payload),
+                    Encoding.UTF8,
+                    "application/json");
+
+                var response = await HttpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+            }
+            catch (Exception softDeleteEx)
+            {
+                var message = $"Supabase item delete failed: {softDeleteEx.Message} (primary: {ex.Message})";
+                System.Diagnostics.Debug.WriteLine($"[Supabase] {message}");
+                SyncStatusChanged?.Invoke(message);
+            }
+        }
+    }
+
     public async Task SaveManifestAsync(IList<Guid> noteIds)
     {
         EnsureDatabaseInitialized();

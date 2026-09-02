@@ -101,6 +101,12 @@ public partial class NoteView : UserControl
         }
     }
 
+    private void OnDeleteButtonClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button button && button.DataContext is TodoItem item && DataContext is NoteViewModel vm)
+            vm.RemoveItemCommand.Execute(item);
+    }
+
     private async void OnCustomColorMenuItemClick(object? sender, RoutedEventArgs e)
     {
         // Color picker dialogs require a Window owner — not supported on mobile

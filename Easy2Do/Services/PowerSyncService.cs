@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -11,7 +12,7 @@ namespace Easy2Do.Services;
 
 /// <summary>
 /// Lightweight sync bootstrap service.
-/// Periodically pulls from Supabase and replaces local notes.
+/// Periodically pulls from Supabase and merges newer remote notes into local state.
 /// Uses JsonNode for all JSON parsing — fully AOT-safe for iOS.
 /// </summary>
 public sealed class PowerSyncService
@@ -118,6 +119,9 @@ public sealed class PowerSyncService
             if (!await _refreshGate.WaitAsync(0))
                 return;
 
+            if (App.MainViewModel != null)
+                await App.MainViewModel.FlushAllPendingSavesAsync();
+
             var notesJson  = await GetSupabaseRawAsync(supabaseUrl, supabaseKey, "notes?select=*");
             var itemsJson  = await GetSupabaseRawAsync(supabaseUrl, supabaseKey, "note_items?select=*&deleted_at_utc=is.null&order=position.asc");
             var orderJson  = await GetSupabaseRawAsync(supabaseUrl, supabaseKey, "note_order?select=note_id,sort_order&order=sort_order.asc");
@@ -193,14 +197,57 @@ public sealed class PowerSyncService
                     orderedIds.Add(oid);
             }
 
-            if (notesById.Count == 0)
+            var localNotes = await _storageService.LoadAllNotesAsync();
+            var localById = new Dictionary<Guid, Note>();
+            foreach (var note in localNotes)
+                localById[note.Id] = note;
+
+            var mergedNotes = new Dictionary<Guid, Note>(localById);
+            var changed = false;
+
+            foreach (var remoteNote in notesById.Values)
             {
-                Console.WriteLine("[Sync] No remote notes found; skipping local replace.");
+                if (!localById.TryGetValue(remoteNote.Id, out var localNote))
+                {
+                    mergedNotes[remoteNote.Id] = remoteNote;
+                    changed = true;
+                    continue;
+                }
+
+                if (IsRemoteNewer(remoteNote.ModifiedDate, localNote.ModifiedDate))
+                {
+                    mergedNotes[remoteNote.Id] = remoteNote;
+                    changed = true;
+                }
+            }
+
+            foreach (var localNote in localNotes)
+            {
+                if (!notesById.ContainsKey(localNote.Id) && mergedNotes.Remove(localNote.Id))
+                    changed = true;
+            }
+
+            var mergedOrder = localNotes
+                .Where(n => mergedNotes.ContainsKey(n.Id))
+                .Select(n => n.Id)
+                .ToList();
+            foreach (var noteId in orderedIds)
+            {
+                if (mergedNotes.ContainsKey(noteId) && !mergedOrder.Contains(noteId))
+                {
+                    mergedOrder.Add(noteId);
+                    changed = true;
+                }
+            }
+
+            if (!changed)
+            {
+                Console.WriteLine("[Sync] Remote snapshot is not newer than local state; skipping merge.");
                 return;
             }
 
-            Console.WriteLine("[Sync] Replacing local notes with remote snapshot.");
-            await _storageService.ReplaceAllNotesAsync(new List<Note>(notesById.Values), orderedIds);
+            Console.WriteLine("[Sync] Merging remote snapshot into local state.");
+            await _storageService.ReplaceAllNotesAsync(new List<Note>(mergedNotes.Values), mergedOrder);
             DataRefreshed?.Invoke();
         }
         catch (Exception ex)
@@ -242,6 +289,11 @@ public sealed class PowerSyncService
         if (string.IsNullOrWhiteSpace(value)) return null;
         if (DateTime.TryParse(value, out var dt)) return dt;
         return null;
+    }
+
+    private static bool IsRemoteNewer(DateTime remoteValue, DateTime localValue)
+    {
+        return remoteValue.ToUniversalTime() > localValue.ToUniversalTime();
     }
 }
 
