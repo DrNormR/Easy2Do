@@ -1096,7 +1096,7 @@ INSERT INTO note_items (
         if (!IsSupabaseDevSyncEnabled()) return;
         try
         {
-            await DeleteAsync("notes", id);
+            await DeleteAsync("notes", id, requireRow: true);
         }
         catch (Exception ex)
         {
@@ -1121,15 +1121,26 @@ INSERT INTO note_items (
         SyncStatusChanged?.Invoke($"Supabase upsert OK ({table}).");
     }
 
-    private async Task DeleteAsync(string table, Guid id)
+    private async Task DeleteAsync(string table, Guid id, bool requireRow = false)
     {
         var supabaseUrl = _settingsService.GetSupabaseUrl();
         var supabaseKey = _settingsService.GetSupabaseApiKey();
         var request = new HttpRequestMessage(HttpMethod.Delete, $"{supabaseUrl.TrimEnd('/')}/rest/v1/{table}?id=eq.{id}");
         request.Headers.TryAddWithoutValidation("apikey", supabaseKey);
         request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {supabaseKey}");
+        if (requireRow)
+            request.Headers.TryAddWithoutValidation("Prefer", "return=representation");
+
         var response = await HttpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
+
+        if (requireRow)
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            if (string.IsNullOrWhiteSpace(body) || body.Trim() == "[]")
+                throw new InvalidOperationException($"Supabase delete affected 0 rows in '{table}' for id={id}.");
+        }
+
         SyncStatusChanged?.Invoke($"Supabase delete OK ({table}).");
     }
 

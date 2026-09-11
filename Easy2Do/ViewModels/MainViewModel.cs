@@ -431,6 +431,9 @@ public partial class MainViewModel : ViewModelBase
     {
         if (note != null && Notes.Contains(note))
         {
+            // Prevent a queued debounced save from re-creating the note after deletion.
+            CancelPendingSave(note.Id);
+
             UnsubscribeNote(note);
             Notes.Remove(note);
             await App.StorageService.DeleteNoteFileAsync(note.Id);
