@@ -1,0 +1,7 @@
+services:
+  easy2do-web:
+    build: .
+    container_name: easy2do-web
+    restart: unless-stopped
+    ports:
+      - "8088:80"
