@@ -1,0 +1,9 @@
+{
+  "name": "Easy2Do",
+  "short_name": "Easy2Do",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f1ea",
+  "theme_color": "#4caf50",
+  "icons": [{ "src": "/icon.png", "sizes": "any", "type": "image/png" }]
+}
